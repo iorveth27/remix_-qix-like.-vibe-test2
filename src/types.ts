@@ -35,3 +35,14 @@ export enum Direction {
   LEFT,
   RIGHT,
 }
+
+/** A spark enemy that patrols the field perimeter */
+export interface SparkState {
+  pos: Point;
+  dir: Point;
+  /** Preferred rotation direction at junctions: 1 = CW, -1 = CCW */
+  rotation: 1 | -1;
+  migrating: boolean;
+  migrateTarget: Point | null;
+  migratePath: Point[];
+}
