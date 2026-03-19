@@ -6,11 +6,17 @@ interface OverlaysProps {
   gameState: 'PLAYING' | 'GAMEOVER' | 'WIN';
   isPaused: boolean;
   capturedPercent: number;
+  sparksEnabled: boolean;
+  bossEnabled: boolean;
+  fuseEnabled: boolean;
+  onToggleSparks: () => void;
+  onToggleBoss: () => void;
+  onToggleFuse: () => void;
   onRestart: () => void;
   onResume: () => void;
 }
 
-export function Overlays({ gameState, isPaused, capturedPercent, onRestart, onResume }: OverlaysProps) {
+export function Overlays({ gameState, isPaused, capturedPercent, sparksEnabled, bossEnabled, fuseEnabled, onToggleSparks, onToggleBoss, onToggleFuse, onRestart, onResume }: OverlaysProps) {
   return (
     <AnimatePresence>
       {gameState === 'GAMEOVER' && (
@@ -72,6 +78,24 @@ export function Overlays({ gameState, isPaused, capturedPercent, onRestart, onRe
               <p className="text-stone-500 text-sm font-light italic">The forest waits for your return.</p>
             </div>
             <div className="flex flex-col gap-3 w-full">
+              {/* Toggles */}
+              {[
+                { label: 'Sparks', enabled: sparksEnabled, onToggle: onToggleSparks },
+                { label: 'Boss', enabled: bossEnabled, onToggle: onToggleBoss },
+                { label: 'Fuse', enabled: fuseEnabled, onToggle: onToggleFuse },
+              ].map(({ label, enabled, onToggle }) => (
+                <button
+                  key={label}
+                  onClick={onToggle}
+                  className="w-full flex items-center justify-between px-5 py-3 rounded-2xl bg-stone-100 border border-stone-200 text-stone-700 font-medium transition-all hover:bg-stone-200 active:scale-95"
+                >
+                  <span className="text-sm">{label}</span>
+                  <div className={`w-11 h-6 rounded-full transition-colors relative ${enabled ? 'bg-emerald-500' : 'bg-stone-300'}`}>
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </div>
+                </button>
+              ))}
+
               <button
                 onClick={onResume}
                 className="w-full py-4 bg-stone-900 text-white rounded-full font-medium transition-all hover:bg-stone-800 active:scale-95 flex items-center justify-center gap-2"

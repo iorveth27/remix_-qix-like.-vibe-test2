@@ -15,6 +15,8 @@ import { Overlays } from './components/Overlays';
 const FUSE_MAX_TIME = 3;   // seconds before the fuse kills the player
 const QIX_RADIUS = 16;     // collision radius for Qix
 const SPIDER_RADIUS = 12;  // collision radius for spider
+const SPARK_RADIUS = 8;
+const SPARK_SPEED = 0.3; // fraction of player crossing speed
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -22,6 +24,9 @@ export default function App() {
 
   const [gameState, setGameState] = useState<'PLAYING' | 'GAMEOVER' | 'WIN'>('PLAYING');
   const [isPaused, setIsPaused] = useState(false);
+  const [sparksEnabled, setSparksEnabled] = useState(() => localStorage.getItem('sparksEnabled') !== 'false');
+  const [bossEnabled, setBossEnabled] = useState(() => localStorage.getItem('bossEnabled') !== 'false');
+  const [fuseEnabled, setFuseEnabled] = useState(() => localStorage.getItem('fuseEnabled') !== 'false');
   const [dimensions, setDimensions] = useState<Dimensions>({ width: 0, height: 0, fieldWidth: 0, fieldHeight: 0, offsetX: 0, offsetY: 0 });
   const [capturedPercent, setCapturedPercent] = useState(0);
   const [lives, setLives] = useState(3);
@@ -39,7 +44,13 @@ export default function App() {
   const damageFlash = useRef(0);
   const fuseTimer = useRef(0);
   const grid = useRef<Uint8Array>(new Uint8Array(GRID_W * GRID_H));
+  // Legacy edge seams: hSeams[y*GRID_W+x]=1 means a historical border ran between row y and y+1 at col x
+  //                    vSeams[y*GRID_W+x]=1 means a historical border ran between col x and x+1 at row y
+  const seamsH = useRef<Uint8Array>(new Uint8Array(GRID_W * GRID_H));
+  const seamsV = useRef<Uint8Array>(new Uint8Array(GRID_W * GRID_H));
   const trail = useRef<Point[]>([]);
+  const invalidLoop = useRef<Point[]>([]);
+  const sparks = useRef<{ pos: Point; dir: Point; migrating: boolean }[]>([]);
   const isOnSafe = useRef<boolean>(true);
   const isTrailing = useRef<boolean>(false);
   const lastTime = useRef<number>(0);
@@ -47,10 +58,16 @@ export default function App() {
   const requestRef = useRef<number>();
   const gameStateRef = useRef(gameState);
   const isPausedRef = useRef(false);
+  const sparksEnabledRef = useRef(true);
+  const bossEnabledRef = useRef(true);
+  const fuseEnabledRef = useRef(true);
   const hasStarted = useRef(false);
 
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
+  useEffect(() => { sparksEnabledRef.current = sparksEnabled; localStorage.setItem('sparksEnabled', String(sparksEnabled)); }, [sparksEnabled]);
+  useEffect(() => { bossEnabledRef.current = bossEnabled; localStorage.setItem('bossEnabled', String(bossEnabled)); }, [bossEnabled]);
+  useEffect(() => { fuseEnabledRef.current = fuseEnabled; localStorage.setItem('fuseEnabled', String(fuseEnabled)); }, [fuseEnabled]);
 
   const startGame = () => {
     setGameState('PLAYING');
@@ -66,7 +83,14 @@ export default function App() {
     spiderPos.current = { x: 0, y: 0 };
     spiderDir.current = Direction.NONE;
     grid.current.fill(0);
+    seamsH.current.fill(0);
+    seamsV.current.fill(0);
     trail.current = [];
+    invalidLoop.current = [];
+    sparks.current = [
+      { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false },
+      { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false },
+    ];
     isOnSafe.current = true;
     isTrailing.current = false;
     animationTime.current = 0;
@@ -220,6 +244,18 @@ export default function App() {
         }
       }
 
+      // Snap sparks that ended up on non-perimeter cells; if they land within
+      // collision range of the player (captured), respawn them at the far corner.
+      // Delayed Edge Migration: mark sparks on now-internal cells as migrating.
+      // They will finish traversing their current segment before snapping at the next vertex.
+      sparks.current = sparks.current.map(spark => {
+        const sgp = getGridPos(spark.pos);
+        if (isSafe(sgp.x, sgp.y) && !isPerimeter(sgp.x, sgp.y)) {
+          return { ...spark, migrating: true };
+        }
+        return spark;
+      });
+
       let filledCount = 0;
       for (let i = 0; i < GRID_W * GRID_H; i++) {
         if (grid.current[i] === 1) filledCount++;
@@ -258,9 +294,27 @@ export default function App() {
       setCapturedPercent(percent);
       capturedPercentRef.current = percent;
       trail.current = [];
+      invalidLoop.current = [];
       isOnSafe.current = true;
       isTrailing.current = false;
       fuseTimer.current = 0;
+
+      // Record the current active border edges as legacy seams so they persist
+      // visually once future captures push the boundary further inward.
+      for (let y = 0; y < GRID_H - 1; y++) {
+        for (let x = 0; x < GRID_W; x++) {
+          if ((grid.current[y * GRID_W + x] === 1) !== (grid.current[(y + 1) * GRID_W + x] === 1)) {
+            seamsH.current[y * GRID_W + x] = 1;
+          }
+        }
+      }
+      for (let y = 0; y < GRID_H; y++) {
+        for (let x = 0; x < GRID_W - 1; x++) {
+          if ((grid.current[y * GRID_W + x] === 1) !== (grid.current[y * GRID_W + x + 1] === 1)) {
+            seamsV.current[y * GRID_W + x] = 1;
+          }
+        }
+      }
     };
 
     // Lose a life: reset spider, decrement lives
@@ -289,6 +343,11 @@ export default function App() {
 
       spiderDir.current = Direction.NONE;
       trail.current = [];
+      invalidLoop.current = [];
+      sparks.current = [
+        { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false },
+        { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false },
+      ];
       isOnSafe.current = true;
       isTrailing.current = false;
       fuseTimer.current = 0;
@@ -318,7 +377,7 @@ export default function App() {
         floatingTexts.current = floatingTexts.current.filter(ft => ft.life > 0);
 
         // ── Fuse (stall penalty while drawing) ──────────────────────────────
-        if (isTrailing.current) {
+        if (fuseEnabledRef.current && isTrailing.current) {
           if (spiderDir.current === Direction.NONE) {
             fuseTimer.current += dt;
             if (fuseTimer.current >= FUSE_MAX_TIME) {
@@ -411,14 +470,21 @@ export default function App() {
                 isTrailing.current = false;
                 spiderDir.current = Direction.NONE;
               } else if (isTrailing.current) {
-                // Check self-intersection
-                const hitSelf = trail.current.some((p, i) => {
-                  if (i > trail.current.length - 5) return false;
-                  return Math.hypot(p.x - nextX, p.y - nextY) < 5;
-                });
-                if (hitSelf) {
-                  handleDeath();
+                // Check self-intersection — non-lethal: trim trail back to hit point
+                let hitIndex = -1;
+                for (let i = 0; i < trail.current.length - 4; i++) {
+                  if (Math.hypot(trail.current[i].x - nextX, trail.current[i].y - nextY) < 5) {
+                    hitIndex = i;
+                    break;
+                  }
+                }
+                if (hitIndex >= 0) {
+                  // Store the cut-off loop for red highlight, trim trail, snap player
+                  invalidLoop.current = trail.current.slice(hitIndex);
+                  trail.current = trail.current.slice(0, hitIndex + 1);
+                  spiderPos.current = { ...trail.current[hitIndex] };
                 } else {
+                  invalidLoop.current = [];
                   trail.current.push(nextPos);
                 }
               }
@@ -430,7 +496,7 @@ export default function App() {
         }
 
         // ── Qix movement ─────────────────────────────────────────────────────
-        {
+        if (bossEnabledRef.current) {
           const speed = Math.hypot(qixVel.current.x, qixVel.current.y);
           let nextQx = qixPos.current.x + qixVel.current.x * dt;
           let nextQy = qixPos.current.y + qixVel.current.y * dt;
@@ -470,7 +536,7 @@ export default function App() {
         }
 
         // ── Qix collision detection ──────────────────────────────────────────
-        if (isTrailing.current) {
+        if (bossEnabledRef.current && isTrailing.current) {
           // Qix touches the incomplete trail
           const qixHitsTrail = trail.current.some(p =>
             Math.hypot(p.x - qixPos.current.x, p.y - qixPos.current.y) < QIX_RADIUS + 3,
@@ -485,6 +551,137 @@ export default function App() {
           }
         }
 
+        // ── Spark movement (directional junction logic) ───────────────────
+        if (sparksEnabledRef.current) {
+          const { fieldWidth: fw, fieldHeight: fh } = dimensions;
+          const baseSpeed = (fw / CROSS_TIME_SECONDS) * SPARK_SPEED;
+          // Speed scales with captured area
+          const sparkSpeed = baseSpeed * (1 + capturedPercentRef.current * 0.015);
+
+          // While player is drawing, chase the trail entry point (last safe position)
+          const sparkTarget = isTrailing.current && trail.current.length > 0
+            ? trail.current[0]
+            : spiderPos.current;
+
+          const cardinals: Point[] = [
+            { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+          ];
+
+          for (let si = 0; si < sparks.current.length; si++) {
+            let { pos, dir, migrating } = sparks.current[si];
+            let remaining = sparkSpeed * dt;
+
+            while (remaining > 0) {
+              const step = Math.min(remaining, 2);
+              remaining -= step;
+
+              if (migrating) {
+                // Delayed Edge Migration: move straight through captured territory,
+                // ignoring the perimeter constraint, until we reach a vertex.
+                const rawX = pos.x + dir.x * step;
+                const rawY = pos.y + dir.y * step;
+                const clampedX = Math.max(0, Math.min(fw, rawX));
+                const clampedY = Math.max(0, Math.min(fh, rawY));
+                const hitBoundary = clampedX !== rawX || clampedY !== rawY;
+
+                pos = { x: clampedX, y: clampedY };
+
+                if (hitBoundary) {
+                  // Hit the field boundary — check if we landed on an active perimeter cell
+                  const clampedGP = getGridPos(pos);
+                  if (isSafe(clampedGP.x, clampedGP.y) && isPerimeter(clampedGP.x, clampedGP.y)) {
+                    migrating = false;
+                  } else {
+                    // Still inside captured territory on the wall — turn 90° toward spark target
+                    // so the spark smoothly walks the wall until it finds the active perimeter
+                    const dx = sparkTarget.x - pos.x;
+                    const dy = sparkTarget.y - pos.y;
+                    if (dir.x !== 0) {
+                      // Was moving horizontally, turn vertically
+                      dir = { x: 0, y: dy >= 0 ? 1 : -1 };
+                    } else {
+                      // Was moving vertically, turn horizontally
+                      dir = { x: dx >= 0 ? 1 : -1, y: 0 };
+                    }
+                  }
+                } else {
+                  // Check if we've organically reached a perimeter cell — migration done
+                  const tryGP = getGridPos(pos);
+                  if (isSafe(tryGP.x, tryGP.y) && isPerimeter(tryGP.x, tryGP.y)) {
+                    migrating = false;
+                  }
+                }
+              } else {
+                // Normal movement: stay on the active perimeter
+                const tryPos = {
+                  x: Math.max(0, Math.min(fw, pos.x + dir.x * step)),
+                  y: Math.max(0, Math.min(fh, pos.y + dir.y * step)),
+                };
+                const tryGP = getGridPos(tryPos);
+                // Treat zero-movement (fully clamped at corner) as blocked so junction logic fires
+                const didMove = tryPos.x !== pos.x || tryPos.y !== pos.y;
+
+                if (didMove && isSafe(tryGP.x, tryGP.y) && isPerimeter(tryGP.x, tryGP.y)) {
+                  pos = tryPos;
+                } else {
+                  // Junction / dead-end: evaluate candidates (no U-turn)
+                  const backward = { x: -dir.x, y: -dir.y };
+                  let bestDir: Point | null = null;
+                  let bestDist = Infinity;
+
+                  for (const d of cardinals) {
+                    if (d.x === backward.x && d.y === backward.y) continue;
+                    const cPos = {
+                      x: Math.max(0, Math.min(fw, pos.x + d.x * 4)),
+                      y: Math.max(0, Math.min(fh, pos.y + d.y * 4)),
+                    };
+                    // Skip directions where clamping produces no movement (e.g. left at x=0)
+                    if (cPos.x === pos.x && cPos.y === pos.y) continue;
+                    const cGP = getGridPos(cPos);
+                    if (!isSafe(cGP.x, cGP.y) || !isPerimeter(cGP.x, cGP.y)) continue;
+                    const dist = Math.hypot(cPos.x - sparkTarget.x, cPos.y - sparkTarget.y);
+                    if (dist < bestDist) { bestDist = dist; bestDir = d; }
+                  }
+
+                  // Fall back to reversal if completely blocked
+                  if (bestDir === null) bestDir = backward;
+                  dir = bestDir;
+
+                  const newPos = {
+                    x: Math.max(0, Math.min(fw, pos.x + dir.x * step)),
+                    y: Math.max(0, Math.min(fh, pos.y + dir.y * step)),
+                  };
+                  const newGP = getGridPos(newPos);
+                  if (isSafe(newGP.x, newGP.y) && isPerimeter(newGP.x, newGP.y)) pos = newPos;
+                }
+              }
+            }
+
+            sparks.current[si] = { pos, dir, migrating };
+          }
+
+          // Spark–spark collision: reverse both when they meet
+          if (sparks.current.length >= 2) {
+            const s0 = sparks.current[0];
+            const s1 = sparks.current[1];
+            if (Math.hypot(s0.pos.x - s1.pos.x, s0.pos.y - s1.pos.y) < SPARK_RADIUS * 2) {
+              sparks.current[0] = { pos: s0.pos, dir: { x: -s0.dir.x, y: -s0.dir.y }, migrating: s0.migrating };
+              sparks.current[1] = { pos: s1.pos, dir: { x: -s1.dir.x, y: -s1.dir.y }, migrating: s1.migrating };
+            }
+          }
+
+          // Spark–player collision (only while on boundary, and not during i-frames after damage)
+          if (isOnSafe.current && damageFlash.current <= 0) {
+            for (const spark of sparks.current) {
+              if (spark.migrating) continue; // in-transit sparks don't hurt the player
+              if (Math.hypot(spark.pos.x - spiderPos.current.x, spark.pos.y - spiderPos.current.y) < SPARK_RADIUS + SPIDER_RADIUS) {
+                handleDeath();
+                break;
+              }
+            }
+          }
+        }
+
         // Win condition
         if (capturedPercentRef.current >= 80) {
           setGameState('WIN');
@@ -493,7 +690,10 @@ export default function App() {
 
       renderFrame(ctx, canvas, dimensions, {
         grid: grid.current,
+        seamsH: seamsH.current,
+        seamsV: seamsV.current,
         trail: trail.current,
+        invalidLoop: invalidLoop.current,
         isTrailing: isTrailing.current,
         isOnSafe: isOnSafe.current,
         spiderPos: spiderPos.current,
@@ -502,6 +702,9 @@ export default function App() {
         captureFlash: captureFlash.current,
         damageFlash: damageFlash.current,
         qixPos: qixPos.current,
+        sparks: sparks.current.map(s => s.pos),
+        sparksEnabled: sparksEnabledRef.current,
+        bossEnabled: bossEnabledRef.current,
         fuseProgress: isTrailing.current ? fuseTimer.current / FUSE_MAX_TIME : 0,
         animationTime: animationTime.current,
       });
@@ -605,6 +808,12 @@ export default function App() {
           gameState={gameState}
           isPaused={isPaused}
           capturedPercent={capturedPercent}
+          sparksEnabled={sparksEnabled}
+          bossEnabled={bossEnabled}
+          fuseEnabled={fuseEnabled}
+          onToggleSparks={() => setSparksEnabled(v => !v)}
+          onToggleBoss={() => setBossEnabled(v => !v)}
+          onToggleFuse={() => setFuseEnabled(v => !v)}
           onRestart={() => { setIsPaused(false); startGame(); }}
           onResume={() => setIsPaused(false)}
         />

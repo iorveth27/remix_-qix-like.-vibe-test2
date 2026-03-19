@@ -3,7 +3,10 @@ import type { Dimensions, Particle, FloatingText, Point } from './types';
 
 export interface RenderState {
   grid: Uint8Array;
+  seamsH: Uint8Array;
+  seamsV: Uint8Array;
   trail: Point[];
+  invalidLoop: Point[];
   isTrailing: boolean;
   isOnSafe: boolean;
   spiderPos: Point;
@@ -12,6 +15,9 @@ export interface RenderState {
   captureFlash: number;
   damageFlash: number;
   qixPos: Point;
+  sparks: Point[];
+  sparksEnabled: boolean;
+  bossEnabled: boolean;
   fuseProgress: number; // 0 = none, 0–1 = how far along trail fuse has burned
   animationTime: number;
 }
@@ -23,9 +29,9 @@ export function renderFrame(
   state: RenderState,
 ) {
   const {
-    grid, trail, isTrailing, isOnSafe, spiderPos,
+    grid, seamsH, seamsV, trail, invalidLoop, isTrailing, isOnSafe, spiderPos,
     particles, floatingTexts, captureFlash, damageFlash,
-    qixPos, fuseProgress, animationTime,
+    qixPos, sparks, sparksEnabled, bossEnabled, fuseProgress, animationTime,
   } = state;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -87,6 +93,71 @@ export function renderFrame(
       }
     }
   }
+  // Legacy seams — historical borders now inside captured territory, drawn as faint lines
+  ctx.save();
+  ctx.strokeStyle = 'rgba(200, 230, 255, 0.55)';
+  ctx.lineWidth = 2.5;
+  ctx.shadowBlur = 5;
+  ctx.shadowColor = 'rgba(150, 200, 255, 0.5)';
+  ctx.beginPath();
+  for (let y = 0; y < GRID_H - 1; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      if (seamsH[y * GRID_W + x] && grid[y * GRID_W + x] === 1 && grid[(y + 1) * GRID_W + x] === 1) {
+        const rx = dims.offsetX + x * cellW;
+        const ry = dims.offsetY + (y + 1) * cellH;
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx + cellW, ry);
+      }
+    }
+  }
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W - 1; x++) {
+      if (seamsV[y * GRID_W + x] && grid[y * GRID_W + x] === 1 && grid[y * GRID_W + x + 1] === 1) {
+        const rx = dims.offsetX + (x + 1) * cellW;
+        const ry = dims.offsetY + y * cellH;
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx, ry + cellH);
+      }
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Territory border lines — draw a bright edge wherever captured meets uncaptured
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+  ctx.beginPath();
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      if (grid[y * GRID_W + x] !== 1) continue;
+      const rx = dims.offsetX + x * cellW;
+      const ry = dims.offsetY + y * cellH;
+      // Right edge: neighbor to the right is uncaptured
+      if (x + 1 < GRID_W && grid[y * GRID_W + (x + 1)] !== 1) {
+        ctx.moveTo(rx + cellW, ry);
+        ctx.lineTo(rx + cellW, ry + cellH);
+      }
+      // Bottom edge: neighbor below is uncaptured
+      if (y + 1 < GRID_H && grid[(y + 1) * GRID_W + x] !== 1) {
+        ctx.moveTo(rx, ry + cellH);
+        ctx.lineTo(rx + cellW, ry + cellH);
+      }
+      // Left edge: neighbor to the left is uncaptured
+      if (x - 1 >= 0 && grid[y * GRID_W + (x - 1)] !== 1) {
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx, ry + cellH);
+      }
+      // Top edge: neighbor above is uncaptured
+      if (y - 1 >= 0 && grid[(y - 1) * GRID_W + x] !== 1) {
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx + cellW, ry);
+      }
+    }
+  }
+  ctx.stroke();
   ctx.restore();
 
   // Current trail
@@ -124,8 +195,27 @@ export function renderFrame(
     }
   }
 
+  // Invalid loop (self-intersection highlight)
+  if (invalidLoop.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 60, 60, 0.9)';
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(dims.offsetX + invalidLoop[0].x, dims.offsetY + invalidLoop[0].y);
+    for (let i = 1; i < invalidLoop.length; i++) {
+      ctx.lineTo(dims.offsetX + invalidLoop[i].x, dims.offsetY + invalidLoop[i].y);
+    }
+    ctx.lineTo(dims.offsetX + invalidLoop[0].x, dims.offsetY + invalidLoop[0].y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // Qix
-  const qx = dims.offsetX + qixPos.x;
+  if (bossEnabled) { const qx = dims.offsetX + qixPos.x;
   const qy = dims.offsetY + qixPos.y;
   const t = animationTime / 1000;
   ctx.save();
@@ -143,6 +233,7 @@ export function renderFrame(
     ctx.stroke();
   }
   ctx.restore();
+  } // end bossEnabled
 
   if (damageFlash > 0) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -184,6 +275,40 @@ export function renderFrame(
     ctx.fillText(ft.text, tx, ty);
     ctx.restore();
   });
+
+  // Sparks
+  if (sparksEnabled) for (let si = 0; si < sparks.length; si++) {
+    const sp = sparks[si];
+    const sx = dims.offsetX + sp.x;
+    const sy = dims.offsetY + sp.y;
+    const phase = animationTime / 80 + si * Math.PI;
+    ctx.save();
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = '#ffdd00';
+    // Outer glow ring
+    ctx.strokeStyle = `rgba(255, 220, 0, ${0.6 + 0.4 * Math.sin(phase)})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 7 + Math.sin(phase * 1.3) * 2, 0, Math.PI * 2);
+    ctx.stroke();
+    // Core
+    ctx.fillStyle = '#fff8c0';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    // Electric crackle lines
+    ctx.strokeStyle = '#ffdd00';
+    ctx.lineWidth = 1;
+    for (let j = 0; j < 4; j++) {
+      const angle = phase + j * (Math.PI / 2);
+      const r1 = 5, r2 = 9 + Math.sin(phase * 2 + j) * 3;
+      ctx.beginPath();
+      ctx.moveTo(sx + Math.cos(angle) * r1, sy + Math.sin(angle) * r1);
+      ctx.lineTo(sx + Math.cos(angle) * r2, sy + Math.sin(angle) * r2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   // Spider body
   const drawX = dims.offsetX + spiderPos.x;
