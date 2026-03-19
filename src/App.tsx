@@ -50,7 +50,7 @@ export default function App() {
   const trailParticles = useRef<Particle[]>([]);
   const trail = useRef<Point[]>([]);
   const invalidLoop = useRef<Point[]>([]);
-  const sparks = useRef<{ pos: Point; dir: Point; migrating: boolean; migrateTarget: Point | null; migratePath: Point[] }[]>([]);
+  const sparks = useRef<{ pos: Point; dir: Point; rotation: 1 | -1; migrating: boolean; migrateTarget: Point | null; migratePath: Point[] }[]>([]);
   const isOnSafe = useRef<boolean>(true);
   const isTrailing = useRef<boolean>(false);
   const lastTime = useRef<number>(0);
@@ -93,8 +93,8 @@ export default function App() {
     trail.current = [];
     invalidLoop.current = [];
     sparks.current = [
-      { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false, migrateTarget: null, migratePath: [] },
-      { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false, migrateTarget: null, migratePath: [] },
+      { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, rotation:  1 as 1|-1, migrating: false, migrateTarget: null, migratePath: [] },
+      { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, rotation: -1 as 1|-1, migrating: false, migrateTarget: null, migratePath: [] },
     ];
     isOnSafe.current = true;
     isTrailing.current = false;
@@ -190,6 +190,15 @@ export default function App() {
     // When the player closes a loop, flood-fill from the Qix position to find the
     // region that contains the Qix. Everything else gets captured.
     const fillCapturedArea = () => {
+      // Determine the BFS seed BEFORE stamping the trail so that the Qix's
+      // grid cell still reads as uncaptured (grid=0).  After stamping, trail
+      // cells become grid=1 / safe, and the seed check would fire the wrong
+      // outward-scan branch, potentially finding an uncaptured cell on the
+      // wrong side of the trail and inverting the captured region.
+      const qixGPpre = getGridPos(qixPos.current);
+      const preSeedX = qixGPpre.x, preSeedY = qixGPpre.y;
+      const preSeedValid = !isSafe(preSeedX, preSeedY); // true when Qix is in uncaptured territory
+
       // 1. Stamp trail into the grid as safe.
       //    Use Bresenham lines between consecutive trail points so that sharp
       //    corners don't leave 1-cell diagonal gaps the Qix flood-fill can sneak through.
@@ -225,14 +234,15 @@ export default function App() {
 
       // 2. Flood fill from Qix position — marks all cells reachable from the Qix
       //    without crossing safe territory (these stay uncaptured)
-      const qixGP = getGridPos(qixPos.current);
       const visited = new Uint8Array(GRID_W * GRID_H);
 
-      // Find actual BFS seed: Qix cell if uncaptured, else nearest uncaptured cell
-      let seedX = qixGP.x, seedY = qixGP.y;
-      let foundSeed = !isSafe(seedX, seedY);
+      // Use the pre-stamp seed when the Qix was in uncaptured territory.
+      // Fall back to outward scan only for the rare case where Qix was already
+      // on safe territory before the trail was drawn (e.g. on the border).
+      let seedX = preSeedX, seedY = preSeedY;
+      let foundSeed = preSeedValid;
       if (!foundSeed) {
-        // Qix landed on captured territory — scan outward for nearest uncaptured cell
+        // Qix was already on safe territory — scan outward for nearest uncaptured cell
         const scanV = new Uint8Array(GRID_W * GRID_H);
         const scanQ: [number, number][] = [[seedX, seedY]];
         scanV[seedY * GRID_W + seedX] = 1;
@@ -317,12 +327,37 @@ export default function App() {
         }
       }
 
-      // Delayed Edge Migration: sparks now inside captured territory navigate along
-      // seam lines (historic borders) to find their way to the active perimeter.
-      // The full path is stored as world-coordinate waypoints so movement code follows it step-by-step.
+      // Delayed Edge Migration: sparks not on the active (player-reachable) perimeter
+      // navigate along seam lines to find their way to the new active perimeter.
+      // This handles both sparks inside newly captured territory AND sparks stranded
+      // on outer-border sections that are now topologically disconnected from the
+      // inner perimeter created by the capture.
+
+      // First, find all perimeter cells reachable from the player via perimeter-only BFS.
+      const activePerimeter = new Uint8Array(GRID_W * GRID_H);
+      {
+        const playerGP2 = getGridPos(spiderPos.current);
+        if (isSafe(playerGP2.x, playerGP2.y) && isPerimeter(playerGP2.x, playerGP2.y)) {
+          const pQ: [number, number][] = [[playerGP2.x, playerGP2.y]];
+          activePerimeter[playerGP2.y * GRID_W + playerGP2.x] = 1;
+          while (pQ.length > 0) {
+            const [cx, cy] = pQ.shift()!;
+            for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]] as [number,number][]) {
+              const nx = cx + ddx, ny = cy + ddy;
+              if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+              if (activePerimeter[ny * GRID_W + nx]) continue;
+              if (!isSafe(nx, ny) || !isPerimeter(nx, ny)) continue;
+              activePerimeter[ny * GRID_W + nx] = 1;
+              pQ.push([nx, ny]);
+            }
+          }
+        }
+      }
+
       sparks.current = sparks.current.map(spark => {
         const sgp = getGridPos(spark.pos);
-        if (!(isSafe(sgp.x, sgp.y) && !isPerimeter(sgp.x, sgp.y))) return spark;
+        // Skip sparks already on the active perimeter
+        if (activePerimeter[sgp.y * GRID_W + sgp.x]) return spark;
 
         const isSeamAdjacent = (x: number, y: number) =>
           (seamsH.current[y * GRID_W + x] ||
@@ -772,8 +807,12 @@ export default function App() {
             { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
           ];
 
+          // Rotate a direction 90° clockwise or counter-clockwise
+          const rotateCW  = (d: Point): Point => ({ x: -d.y, y:  d.x });
+          const rotateCCW = (d: Point): Point => ({ x:  d.y, y: -d.x });
+
           for (let si = 0; si < sparks.current.length; si++) {
-            let { pos, dir, migrating, migrateTarget, migratePath } = sparks.current[si];
+            let { pos, dir, rotation, migrating, migrateTarget, migratePath } = sparks.current[si];
             migratePath = [...migratePath]; // local copy so we can mutate safely
             let remaining = sparkSpeed * dt;
 
@@ -809,35 +848,56 @@ export default function App() {
                   y: Math.max(0, Math.min(fh, pos.y + dir.y * step)),
                 };
                 const tryGP = getGridPos(tryPos);
-                // Treat zero-movement (fully clamped at corner) as blocked so junction logic fires
                 const didMove = tryPos.x !== pos.x || tryPos.y !== pos.y;
 
                 if (didMove && isSafe(tryGP.x, tryGP.y) && isPerimeter(tryGP.x, tryGP.y)) {
                   pos = tryPos;
                 } else {
-                  // Junction / dead-end: evaluate candidates (no U-turn)
-                  const backward = { x: -dir.x, y: -dir.y };
-                  let bestDir: Point | null = null;
-                  let bestDist = Infinity;
+                  // Junction: pick direction using rotation preference + shortest arc to player.
+                  // Priority order: rotational turn → forward → counter-rotational turn → reverse.
+                  // Among all valid perimeter candidates, pick the one with the shorter
+                  // perimeter arc to the player (approximated by Euclidean dist).
+                  const backward  = { x: -dir.x, y: -dir.y };
+                  const rotTurn   = rotation === 1 ? rotateCW(dir) : rotateCCW(dir);
+                  const antiTurn  = rotation === 1 ? rotateCCW(dir) : rotateCW(dir);
+                  // Ordered by rotational preference; backward last
+                  const priority = [rotTurn, dir, antiTurn, backward];
 
-                  for (const d of cardinals) {
-                    if (d.x === backward.x && d.y === backward.y) continue;
+                  // Collect all valid perimeter directions with their distances
+                  const candidates: { d: Point; dist: number; priority: number }[] = [];
+                  for (let pi = 0; pi < priority.length; pi++) {
+                    const d = priority[pi];
                     const cPos = {
-                      x: Math.max(0, Math.min(fw, pos.x + d.x * 4)),
-                      y: Math.max(0, Math.min(fh, pos.y + d.y * 4)),
+                      x: Math.max(0, Math.min(fw, pos.x + d.x * 6)),
+                      y: Math.max(0, Math.min(fh, pos.y + d.y * 6)),
                     };
-                    // Skip directions where clamping produces no movement (e.g. left at x=0)
                     if (cPos.x === pos.x && cPos.y === pos.y) continue;
                     const cGP = getGridPos(cPos);
                     if (!isSafe(cGP.x, cGP.y) || !isPerimeter(cGP.x, cGP.y)) continue;
-                    const dist = Math.hypot(cPos.x - sparkTarget.x, cPos.y - sparkTarget.y);
-                    if (dist < bestDist) { bestDist = dist; bestDir = d; }
+                    candidates.push({ d, dist: Math.hypot(cPos.x - sparkTarget.x, cPos.y - sparkTarget.y), priority: pi });
                   }
 
-                  // Fall back to reversal if completely blocked
-                  if (bestDir === null) bestDir = backward;
-                  dir = bestDir;
+                  let bestDir: Point;
+                  if (candidates.length === 0) {
+                    // Completely stuck — reverse
+                    bestDir = backward;
+                  } else if (candidates.length === 1) {
+                    bestDir = candidates[0].d;
+                  } else {
+                    // Both rotational directions valid: pick the one that reaches player faster.
+                    // Bias strongly toward rotation preference (priority 0) unless the other arc
+                    // is meaningfully shorter (> 15% closer).
+                    candidates.sort((a, b) => a.priority - b.priority);
+                    const rot = candidates[0];
+                    const best = candidates.reduce((a, b) => b.dist < a.dist ? b : a);
+                    bestDir = best.dist < rot.dist * 0.85 ? best.d : rot.d;
+                  }
 
+                  // Update rotation to reflect chosen turn direction
+                  if (bestDir.x === rotateCW(dir).x && bestDir.y === rotateCW(dir).y) rotation = 1;
+                  else if (bestDir.x === rotateCCW(dir).x && bestDir.y === rotateCCW(dir).y) rotation = -1;
+
+                  dir = bestDir;
                   const newPos = {
                     x: Math.max(0, Math.min(fw, pos.x + dir.x * step)),
                     y: Math.max(0, Math.min(fh, pos.y + dir.y * step)),
@@ -848,16 +908,16 @@ export default function App() {
               }
             }
 
-            sparks.current[si] = { pos, dir, migrating, migrateTarget, migratePath };
+            sparks.current[si] = { pos, dir, rotation, migrating, migrateTarget, migratePath };
           }
 
-          // Spark–spark collision: reverse both when they meet
+          // Spark–spark collision: reverse direction (rotation stays the same so they continue on their arc)
           if (sparks.current.length >= 2) {
             const s0 = sparks.current[0];
             const s1 = sparks.current[1];
             if (Math.hypot(s0.pos.x - s1.pos.x, s0.pos.y - s1.pos.y) < SPARK_RADIUS * 2) {
-              sparks.current[0] = { pos: s0.pos, dir: { x: -s0.dir.x, y: -s0.dir.y }, migrating: s0.migrating, migrateTarget: s0.migrateTarget, migratePath: s0.migratePath };
-              sparks.current[1] = { pos: s1.pos, dir: { x: -s1.dir.x, y: -s1.dir.y }, migrating: s1.migrating, migrateTarget: s1.migrateTarget, migratePath: s1.migratePath };
+              sparks.current[0] = { ...s0, dir: { x: -s0.dir.x, y: -s0.dir.y } };
+              sparks.current[1] = { ...s1, dir: { x: -s1.dir.x, y: -s1.dir.y } };
             }
           }
 
