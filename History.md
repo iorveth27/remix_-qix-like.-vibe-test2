@@ -28,3 +28,4 @@
 26. Bug: sometimes the spider gets damaged for no reason at all
 27. Bug #2: the sparks pathfinding isn't smooth. sometimes they stay in the corner or instantly respawn on the new border when captured
 28. Bug: sometimes the spider gets damaged for no reason at all (died without touching a spark)
+29. Bug #1: web doesn't fully cover captured territory. Bug #2: sparks don't move to new borders after capture

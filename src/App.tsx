@@ -50,7 +50,7 @@ export default function App() {
   const seamsV = useRef<Uint8Array>(new Uint8Array(GRID_W * GRID_H));
   const trail = useRef<Point[]>([]);
   const invalidLoop = useRef<Point[]>([]);
-  const sparks = useRef<{ pos: Point; dir: Point; migrating: boolean }[]>([]);
+  const sparks = useRef<{ pos: Point; dir: Point; migrating: boolean; migrateTarget: Point | null }[]>([]);
   const isOnSafe = useRef<boolean>(true);
   const isTrailing = useRef<boolean>(false);
   const lastTime = useRef<number>(0);
@@ -88,8 +88,8 @@ export default function App() {
     trail.current = [];
     invalidLoop.current = [];
     sparks.current = [
-      { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false },
-      { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false },
+      { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false, migrateTarget: null },
+      { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false, migrateTarget: null },
     ];
     isOnSafe.current = true;
     isTrailing.current = false;
@@ -172,11 +172,28 @@ export default function App() {
     // When the player closes a loop, flood-fill from the Qix position to find the
     // region that contains the Qix. Everything else gets captured.
     const fillCapturedArea = () => {
-      // 1. Stamp trail into the grid as safe
-      trail.current.forEach(p => {
-        const gp = getGridPos(p);
-        grid.current[gp.y * GRID_W + gp.x] = 1;
-      });
+      // 1. Stamp trail into the grid as safe.
+      //    Use Bresenham lines between consecutive trail points so that sharp
+      //    corners don't leave 1-cell diagonal gaps the Qix flood-fill can sneak through.
+      for (let ti = 0; ti < trail.current.length; ti++) {
+        const gp = getGridPos(trail.current[ti]);
+        if (ti === 0) {
+          grid.current[gp.y * GRID_W + gp.x] = 1;
+        } else {
+          const prev = getGridPos(trail.current[ti - 1]);
+          let x = prev.x, y = prev.y;
+          const dx = Math.abs(gp.x - prev.x), sx = prev.x < gp.x ? 1 : -1;
+          const dy = -Math.abs(gp.y - prev.y), sy = prev.y < gp.y ? 1 : -1;
+          let err = dx + dy;
+          while (true) {
+            if (x >= 0 && x < GRID_W && y >= 0 && y < GRID_H) grid.current[y * GRID_W + x] = 1;
+            if (x === gp.x && y === gp.y) break;
+            const e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x += sx; }
+            if (e2 <= dx) { err += dx; y += sy; }
+          }
+        }
+      }
 
       // 2. Flood fill from Qix position — marks all cells reachable from the Qix
       //    without crossing safe territory (these stay uncaptured)
@@ -244,14 +261,32 @@ export default function App() {
         }
       }
 
-      // Snap sparks that ended up on non-perimeter cells; if they land within
-      // collision range of the player (captured), respawn them at the far corner.
-      // Delayed Edge Migration: mark sparks on now-internal cells as migrating.
-      // They will finish traversing their current segment before snapping at the next vertex.
+      // Delayed Edge Migration: sparks now inside captured territory get a BFS-computed
+      // target on the nearest active perimeter. They will rush straight to it.
       sparks.current = sparks.current.map(spark => {
         const sgp = getGridPos(spark.pos);
         if (isSafe(sgp.x, sgp.y) && !isPerimeter(sgp.x, sgp.y)) {
-          return { ...spark, migrating: true };
+          // BFS from spark's grid cell to nearest active perimeter cell
+          const bV = new Uint8Array(GRID_W * GRID_H);
+          const bQ: [number, number][] = [[sgp.x, sgp.y]];
+          bV[sgp.y * GRID_W + sgp.x] = 1;
+          let tCell: [number, number] | null = null;
+          bfsMig: while (bQ.length > 0) {
+            const [cx, cy] = bQ.shift()!;
+            for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]] as [number,number][]) {
+              const nx = cx + ddx, ny = cy + ddy;
+              if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+              if (bV[ny * GRID_W + nx]) continue;
+              bV[ny * GRID_W + nx] = 1;
+              if (isSafe(nx, ny) && isPerimeter(nx, ny)) { tCell = [nx, ny]; break bfsMig; }
+              bQ.push([nx, ny]);
+            }
+          }
+          const migrateTarget = tCell ? {
+            x: (tCell[0] / (GRID_W - 1)) * dimensions.fieldWidth,
+            y: (tCell[1] / (GRID_H - 1)) * dimensions.fieldHeight,
+          } : null;
+          return { ...spark, migrating: true, migrateTarget };
         }
         return spark;
       });
@@ -568,49 +603,43 @@ export default function App() {
           ];
 
           for (let si = 0; si < sparks.current.length; si++) {
-            let { pos, dir, migrating } = sparks.current[si];
+            let { pos, dir, migrating, migrateTarget } = sparks.current[si];
             let remaining = sparkSpeed * dt;
 
             while (remaining > 0) {
               const step = Math.min(remaining, 2);
               remaining -= step;
 
-              if (migrating) {
-                // Delayed Edge Migration: move straight through captured territory,
-                // ignoring the perimeter constraint, until we reach a vertex.
-                const rawX = pos.x + dir.x * step;
-                const rawY = pos.y + dir.y * step;
-                const clampedX = Math.max(0, Math.min(fw, rawX));
-                const clampedY = Math.max(0, Math.min(fh, rawY));
-                const hitBoundary = clampedX !== rawX || clampedY !== rawY;
+              if (migrating && migrateTarget) {
+                // Aggressive migration: rush straight to the pre-computed perimeter target
+                // at 3× speed so sparks visibly threaten the player on the new border.
+                const rushStep = step * 3;
+                const dx = migrateTarget.x - pos.x;
+                const dy = migrateTarget.y - pos.y;
+                const dist = Math.hypot(dx, dy);
 
-                pos = { x: clampedX, y: clampedY };
-
-                if (hitBoundary) {
-                  // Hit the field boundary — check if we landed on an active perimeter cell
-                  const clampedGP = getGridPos(pos);
-                  if (isSafe(clampedGP.x, clampedGP.y) && isPerimeter(clampedGP.x, clampedGP.y)) {
-                    migrating = false;
-                  } else {
-                    // Still inside captured territory on the wall — turn 90° toward spark target
-                    // so the spark smoothly walks the wall until it finds the active perimeter
-                    const dx = sparkTarget.x - pos.x;
-                    const dy = sparkTarget.y - pos.y;
-                    if (dir.x !== 0) {
-                      // Was moving horizontally, turn vertically
-                      dir = { x: 0, y: dy >= 0 ? 1 : -1 };
-                    } else {
-                      // Was moving vertically, turn horizontally
-                      dir = { x: dx >= 0 ? 1 : -1, y: 0 };
-                    }
-                  }
+                if (dist <= rushStep) {
+                  // Arrived — snap exactly, resume normal movement
+                  pos = { ...migrateTarget };
+                  migrating = false;
+                  migrateTarget = null;
+                  // Orient direction along dominant axis of final approach
+                  dir = Math.abs(dx) >= Math.abs(dy)
+                    ? { x: dx >= 0 ? 1 : -1, y: 0 }
+                    : { x: 0, y: dy >= 0 ? 1 : -1 };
                 } else {
-                  // Check if we've organically reached a perimeter cell — migration done
-                  const tryGP = getGridPos(pos);
-                  if (isSafe(tryGP.x, tryGP.y) && isPerimeter(tryGP.x, tryGP.y)) {
-                    migrating = false;
-                  }
+                  const nx = dx / dist, ny = dy / dist;
+                  pos = {
+                    x: Math.max(0, Math.min(fw, pos.x + nx * rushStep)),
+                    y: Math.max(0, Math.min(fh, pos.y + ny * rushStep)),
+                  };
+                  dir = Math.abs(nx) >= Math.abs(ny)
+                    ? { x: nx >= 0 ? 1 : -1, y: 0 }
+                    : { x: 0, y: ny >= 0 ? 1 : -1 };
                 }
+              } else if (migrating) {
+                // migrateTarget is null (no perimeter found) — just clear migration
+                migrating = false;
               } else {
                 // Normal movement: stay on the active perimeter
                 const tryPos = {
@@ -657,7 +686,7 @@ export default function App() {
               }
             }
 
-            sparks.current[si] = { pos, dir, migrating };
+            sparks.current[si] = { pos, dir, migrating, migrateTarget };
           }
 
           // Spark–spark collision: reverse both when they meet
@@ -665,8 +694,8 @@ export default function App() {
             const s0 = sparks.current[0];
             const s1 = sparks.current[1];
             if (Math.hypot(s0.pos.x - s1.pos.x, s0.pos.y - s1.pos.y) < SPARK_RADIUS * 2) {
-              sparks.current[0] = { pos: s0.pos, dir: { x: -s0.dir.x, y: -s0.dir.y }, migrating: s0.migrating };
-              sparks.current[1] = { pos: s1.pos, dir: { x: -s1.dir.x, y: -s1.dir.y }, migrating: s1.migrating };
+              sparks.current[0] = { pos: s0.pos, dir: { x: -s0.dir.x, y: -s0.dir.y }, migrating: s0.migrating, migrateTarget: s0.migrateTarget };
+              sparks.current[1] = { pos: s1.pos, dir: { x: -s1.dir.x, y: -s1.dir.y }, migrating: s1.migrating, migrateTarget: s1.migrateTarget };
             }
           }
 
