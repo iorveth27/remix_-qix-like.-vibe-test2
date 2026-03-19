@@ -56,6 +56,8 @@ export default function App() {
   const lastTime = useRef<number>(0);
   const animationTime = useRef<number>(0);
   const bucketAngle = useRef<number>(0);
+  const bucketTilt = useRef<number>(0);
+  const bucketPitch = useRef<number>(1);
   const captureWaveMask = useRef<Uint8Array | null>(null);
   const captureWaveProgress = useRef<number>(1);
   const requestRef = useRef<number>();
@@ -504,6 +506,19 @@ export default function App() {
       if (gameStateRef.current === 'PLAYING' && !isPausedRef.current) {
         animationTime.current += dt * 1000;
 
+        // Smoothly bank the bucket left or right based on horizontal movement
+        let targetTilt = 0;
+        if (spiderDir.current === Direction.LEFT) targetTilt = 0.25;
+        else if (spiderDir.current === Direction.RIGHT) targetTilt = -0.25;
+
+        // Smoothly compress/stretch the bucket vertically based on Y movement
+        let targetPitch = 1;
+        if (spiderDir.current === Direction.UP) targetPitch = 1.15;
+        else if (spiderDir.current === Direction.DOWN) targetPitch = 0.85;
+
+        bucketTilt.current += (targetTilt - bucketTilt.current) * (dt * 12);
+        bucketPitch.current += (targetPitch - bucketPitch.current) * (dt * 12);
+
         // Wave reveal progress
         if (captureWaveProgress.current < 1) {
           captureWaveProgress.current = Math.min(1, captureWaveProgress.current + dt / 0.8);
@@ -881,11 +896,14 @@ export default function App() {
         sparks: sparks.current.map(s => s.pos),
         sparksEnabled: sparksEnabledRef.current,
         bossEnabled: bossEnabledRef.current,
-        fuseProgress: isTrailing.current ? fuseTimer.current / FUSE_MAX_TIME : 0,
+        fuseProgress: isTrailing.current ? fuseTimer.current / 5 : 0,
         animationTime: animationTime.current,
         bucketAngle: bucketAngle.current,
+        bucketTilt: bucketTilt.current,
+        bucketPitch: bucketPitch.current,
         captureWaveMask: captureWaveMask.current,
         captureWaveProgress: captureWaveProgress.current,
+        isMoving: spiderDir.current !== Direction.NONE,
       });
 
       requestRef.current = requestAnimationFrame(update);

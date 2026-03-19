@@ -21,45 +21,83 @@ export interface RenderState {
   fuseProgress: number; // 0 = none, 0–1 = how far along trail fuse has burned
   animationTime: number;
   bucketAngle: number;
+  bucketTilt: number;
+  bucketPitch: number;
   captureWaveMask: Uint8Array | null;
   captureWaveProgress: number;
+  isMoving: boolean;
 }
 
-const BUCKET_SVG = `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+const BUCKET_SVG = `<svg width="84" height="84" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="body" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
-      <stop offset="0%" stop-color="#ff7b7b"/>
-      <stop offset="70%" stop-color="#ef4444"/>
-      <stop offset="100%" stop-color="#991b1b"/>
-    </radialGradient>
-    <radialGradient id="hole" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-      <stop offset="0%" stop-color="#7f1d1d"/>
-      <stop offset="80%" stop-color="#450a0a"/>
-      <stop offset="100%" stop-color="#280404"/>
-    </radialGradient>
-    <linearGradient id="handle" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#e2e8f0"/>
-      <stop offset="50%" stop-color="#f8fafc"/>
-      <stop offset="100%" stop-color="#94a3b8"/>
+    <!-- Plastic Body (Vibrant Red/Pink Gloss) -->
+    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff4d6d"/>
+      <stop offset="15%" stop-color="#ff768b"/>
+      <stop offset="40%" stop-color="#ff4d6d"/>
+      <stop offset="85%" stop-color="#c81e31"/>
+      <stop offset="100%" stop-color="#7a0410"/>
+    </linearGradient>
+    
+    <!-- Doughnut Rim (Vertical Light to Dark) -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ff8a9c"/>
+      <stop offset="60%" stop-color="#e8152e"/>
+      <stop offset="100%" stop-color="#9d0618"/>
+    </linearGradient>
+
+    <!-- Sand Gradient inside the cavity -->
+    <linearGradient id="sandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#facc15"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
     </linearGradient>
   </defs>
-  <circle cx="34" cy="34" r="28" fill="rgba(0,0,0,0.3)"/>
-  <circle cx="32" cy="32" r="30" fill="#1e293b"/>
-  <circle cx="32" cy="32" r="28" fill="url(#body)"/>
-  <circle cx="32" cy="32" r="22" fill="#1e293b"/>
-  <circle cx="32" cy="32" r="20" fill="url(#hole)"/>
+
+  <!-- Ambient Drop Shadow -->
+  <ellipse cx="50" cy="78" rx="24" ry="11" fill="rgba(0,0,0,0.2)"/>
+
+  <!-- Tapered Body Base Ellipse -->
+  <ellipse cx="50" cy="73" rx="20" ry="9" fill="url(#bodyGrad)"/>
   
-  <!-- Sand pile inside -->
-  <circle cx="32" cy="32" r="16" fill="#facc15"/>
-  <circle cx="30" cy="30" r="12" fill="#fde047"/>
+  <!-- Tapered Body Trapezoid connecting the base to the rim -->
+  <polygon points="21,30 30,73 70,73 79,30" fill="url(#bodyGrad)"/>
+
+  <!-- Subtle shadow cast from the thick rim onto the bucket body -->
+  <path d="M 20.5 30 Q 50 48 79.5 30 Z" fill="rgba(0,0,0,0.2)"/>
+
+  <!-- Cute Kawaii Face -->
+  <!-- Left Eye -->
+  <polyline points="39,58 45,61 39,64" fill="none" stroke="#330b0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Right Eye -->
+  <polyline points="61,58 55,61 61,64" fill="none" stroke="#330b0b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Happy Open Mouth -->
+  <path d="M 46 66 C 46 76, 54 76, 54 66 Z" fill="#330b0b" stroke="#330b0b" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Tiny red tongue sticking up -->
+  <path d="M 48 70 C 48 74, 52 74, 52 70 Z" fill="#ff4d6d"/>
+
+  <!-- Left-side Specular Highlight (Plastic Shine) -->
+  <path d="M 27 45 Q 26 55 29 65" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.65"/>
+
+  <!-- Giant Outer Rim Doughnut -->
+  <ellipse cx="50" cy="30" rx="35" ry="16" fill="url(#rimGrad)"/>
   
-  <path d="M 32,6 A 26,26 0 0,1 32,58" fill="none" stroke="url(#handle)" stroke-width="6" stroke-linecap="round"/>
-  
-  <circle cx="32" cy="6" r="4.5" fill="#f8fafc" stroke="#1e293b" stroke-width="2"/>
-  <circle cx="32" cy="58" r="4.5" fill="#f8fafc" stroke="#1e293b" stroke-width="2"/>
-  
-  <!-- Outer rim glossy reflection -->
-  <path d="M 12,12 A 28,28 0 0,1 52,12" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+  <!-- Inner Rim Wall (Dark Cavity Hole establishing the thickness) -->
+  <ellipse cx="50" cy="30" rx="25" ry="9" fill="#5c000a"/>
+
+  <!-- Elevated Sand filling the cavity -->
+  <ellipse cx="50" cy="31" rx="24" ry="8" fill="url(#sandGrad)"/>
+
+  <!-- Curving Sand Swirls/Rake texture details -->
+  <g fill="none" stroke="#a16207" stroke-width="1.2" stroke-linecap="round" opacity="0.6">
+    <path d="M 33 29 Q 40 27 50 31 T 66 29"/>
+    <path d="M 37 32 Q 45 30 52 33 T 62 31"/>
+    <path d="M 42 35 Q 48 33 55 35"/>
+  </g>
+
+  <!-- High-gloss Rim Specular Highlights -->
+  <ellipse cx="22" cy="26" rx="4" ry="2" fill="#ffffff" transform="rotate(-30, 22, 26)" opacity="0.8"/>
+  <ellipse cx="16" cy="31" rx="2" ry="2" fill="#ffffff" opacity="0.6"/>
 </svg>`;
 
 const bucketImg = new Image();
@@ -98,10 +136,10 @@ export function renderFrame(
   state: RenderState,
 ) {
   const {
-    grid, historyStack, trailParticles, trail, invalidLoop, isTrailing, isOnSafe, spiderPos,
-    particles, floatingTexts, captureFlash, damageFlash,
-    qixPos, sparks, sparksEnabled, bossEnabled, fuseProgress, animationTime,
-    bucketAngle, captureWaveMask, captureWaveProgress,
+    grid, historyStack, trailParticles, trail, invalidLoop, isTrailing, isOnSafe,
+    spiderPos, particles, floatingTexts, captureFlash, damageFlash, qixPos, sparks,
+    sparksEnabled, bossEnabled, fuseProgress, animationTime, bucketAngle, bucketTilt, bucketPitch,
+    captureWaveMask, captureWaveProgress, isMoving
   } = state;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -426,13 +464,21 @@ export function renderFrame(
 
   ctx.save();
   ctx.translate(drawX, drawY);
-  ctx.rotate(bucketAngle);
 
+  // Add 3D geometric pitch scaling (stretches/squishes the SVG) for UP/DOWN pouring
+  ctx.scale(1, bucketPitch);
+
+  // Note: For a tilted 3D perspective isometric bucket, rotating it by velocity angle 
+  // breaks the geometry projection (it makes it look like it falls over on its side).
+  // Add geometric tilt when pouring sand (moving)
+  ctx.rotate(bucketTilt);
+
+  // Draw the new bucket
   if (bucketImg.complete) {
-    ctx.drawImage(bucketImg, -20, -20, 40, 40);
+    // The SVG is 100x100, let's draw it at roughly 44x44
+    ctx.drawImage(bucketImg, -22, -22, 44, 44);
   } else {
-    // Fallback
-    ctx.fillStyle = '#ef4444';
+    ctx.fillStyle = '#ff4d6d';
     ctx.beginPath();
     ctx.arc(0, 0, 16, 0, Math.PI * 2);
     ctx.fill();

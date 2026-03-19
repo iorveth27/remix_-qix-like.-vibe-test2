@@ -48,23 +48,46 @@ export function HUD({ isVisible, capturedPercent, lives, onPause }: HUDProps) {
 
             {/* Center Progress */}
             <div className="flex justify-center items-start pointer-events-none mt-1">
-              <div className="bg-[#46bcf3] border-[3px] border-black rounded-[20px] px-6 py-2 shadow-[0_6px_0_#1e293b] flex flex-col items-center pb-3 relative overflow-hidden">
+              <div className="bg-[#46bcf3] border-[3px] border-black rounded-[20px] px-3 py-2 shadow-[0_5px_0_#1e293b] flex flex-row items-center gap-2 relative overflow-hidden">
                 {/* Glossy top highlight */}
-                <div className="absolute top-0 left-0 right-0 h-4 bg-white/20 rounded-t-[16px] pointer-events-none" />
+                <div className="absolute top-0 left-0 right-0 h-3 bg-white/20 rounded-t-[16px] pointer-events-none" />
                 
-                <span className="text-[24px] font-black text-white mb-2 leading-none relative z-10" style={{ WebkitTextStroke: '2px black', textShadow: '0 3px 0 #000' }}>
-                  {capturedPercent} / 80
-                </span>
-                
-                <div className="w-32 md:w-48 h-5 bg-slate-800 rounded-full border-[3px] border-black overflow-hidden relative shadow-[inset_0_3px_6px_rgba(0,0,0,0.6)]">
+                {/* Progress Bar Track (0 to 100%) */}
+                <div className="w-40 md:w-64 h-6 bg-slate-800 rounded-full border-[3px] border-black relative shadow-[inset_0_3px_6px_rgba(0,0,0,0.6)]">
+                  
+                  {/* Fill */}
                   <div 
-                    className="absolute top-0 bottom-0 left-0 bg-[#fde047] transition-all duration-300 border-r-[3px] border-black" 
-                    style={{ width: `${Math.min(100, (capturedPercent / 80) * 100)}%` }} 
+                    className="absolute top-0 bottom-0 left-0 bg-[#fde047] transition-all duration-300 rounded-l-full overflow-hidden" 
+                    style={{ 
+                      width: `${Math.min(100, capturedPercent)}%`,
+                      borderRight: capturedPercent > 0 ? '3px solid black' : 'none',
+                      borderTopRightRadius: capturedPercent >= 98 ? '9999px' : '0',
+                      borderBottomRightRadius: capturedPercent >= 98 ? '9999px' : '0'
+                    }} 
                   >
                     {/* Inner progress bar highlight */}
-                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/40 rounded-t-full pointer-events-none" />
+                    <div className="absolute top-0 left-0 w-[500px] h-1.5 bg-white/40 pointer-events-none" />
+                  </div>
+
+                  {/* Goal Star at 80% */}
+                  <div 
+                    className="absolute top-1/2 z-20 flex flex-col items-center justify-center pointer-events-none" 
+                    style={{ left: '80%', transform: 'translate(-50%, -50%)' }}
+                  >
+                    <div className="w-1.5 h-7 bg-white/20 absolute -z-10 rounded-full" />
+                    <span 
+                      className="text-[20px] leading-none" 
+                      style={{ filter: 'drop-shadow(0px 2px 0px rgba(0,0,0,1)) drop-shadow(0px -1px 0px rgba(0,0,0,1)) drop-shadow(1px 0px 0px rgba(0,0,0,1)) drop-shadow(-1px 0px 0px rgba(0,0,0,1))' }}
+                    >
+                      ⭐
+                    </span>
                   </div>
                 </div>
+
+                {/* Percentage Text on the Right */}
+                <span className="text-[20px] font-black text-white leading-none relative z-10 w-12 text-right tracking-tight translate-y-[1px]" style={{ WebkitTextStroke: '2px black', textShadow: '0 3px 0 #000' }}>
+                  {capturedPercent}%
+                </span>
               </div>
             </div>
 
