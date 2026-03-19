@@ -3,7 +3,7 @@ import type { Dimensions, Particle, FloatingText, Point } from './types';
 
 export interface RenderState {
   grid: Uint8Array;
-  historyStack: Path2D[];
+  historyStack: Uint8Array[];
   trailParticles: Particle[];
   trail: Point[];
   invalidLoop: Point[];
@@ -25,6 +25,46 @@ export interface RenderState {
   captureWaveProgress: number;
 }
 
+const BUCKET_SVG = `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="body" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
+      <stop offset="0%" stop-color="#ff7b7b"/>
+      <stop offset="70%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#991b1b"/>
+    </radialGradient>
+    <radialGradient id="hole" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#7f1d1d"/>
+      <stop offset="80%" stop-color="#450a0a"/>
+      <stop offset="100%" stop-color="#280404"/>
+    </radialGradient>
+    <linearGradient id="handle" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e2e8f0"/>
+      <stop offset="50%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#94a3b8"/>
+    </linearGradient>
+  </defs>
+  <circle cx="34" cy="34" r="28" fill="rgba(0,0,0,0.3)"/>
+  <circle cx="32" cy="32" r="30" fill="#1e293b"/>
+  <circle cx="32" cy="32" r="28" fill="url(#body)"/>
+  <circle cx="32" cy="32" r="22" fill="#1e293b"/>
+  <circle cx="32" cy="32" r="20" fill="url(#hole)"/>
+  
+  <!-- Sand pile inside -->
+  <circle cx="32" cy="32" r="16" fill="#facc15"/>
+  <circle cx="30" cy="30" r="12" fill="#fde047"/>
+  
+  <path d="M 32,6 A 26,26 0 0,1 32,58" fill="none" stroke="url(#handle)" stroke-width="6" stroke-linecap="round"/>
+  
+  <circle cx="32" cy="6" r="4.5" fill="#f8fafc" stroke="#1e293b" stroke-width="2"/>
+  <circle cx="32" cy="58" r="4.5" fill="#f8fafc" stroke="#1e293b" stroke-width="2"/>
+  
+  <!-- Outer rim glossy reflection -->
+  <path d="M 12,12 A 28,28 0 0,1 52,12" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+</svg>`;
+
+const bucketImg = new Image();
+bucketImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(BUCKET_SVG);
+
 function hashFloat(a: number, b: number): number {
   let h = (a * 374761393 + b * 1103515245) | 0;
   h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
@@ -35,16 +75,16 @@ function hashFloat(a: number, b: number): number {
 const patCanvas = document.createElement('canvas');
 patCanvas.width = 32; patCanvas.height = 32;
 const patCtx = patCanvas.getContext('2d')!;
-patCtx.fillStyle = '#C89040';
+patCtx.fillStyle = '#f9a8d4'; // Base pink
 patCtx.fillRect(0, 0, 32, 32);
 for (let gy = 0; gy < 32; gy++) {
   for (let gx = 0; gx < 32; gx++) {
     const v = hashFloat(gx * 31 + 7, gy * 17 + 3);
-    if (v < 0.3) {
-      patCtx.fillStyle = `rgba(0,0,0,${(0.05 + v * 0.35).toFixed(2)})`;
+    if (v < 0.15) {
+      patCtx.fillStyle = '#ffffff'; // White specks
       patCtx.fillRect(gx, gy, 1, 1);
-    } else if (v > 0.75) {
-      patCtx.fillStyle = `rgba(255,220,120,${((v - 0.75) * 0.7).toFixed(2)})`;
+    } else if (v > 0.85) {
+      patCtx.fillStyle = '#be185d'; // Dark pink specks
       patCtx.fillRect(gx, gy, 1, 1);
     }
   }
@@ -81,28 +121,28 @@ export function renderFrame(
     ctx.restore();
   }
 
-  // Wooden borders
-  const borderThickness = 12;
+  // Glossy plastic/metal borders
+  const borderThickness = 14;
   ctx.save();
-  ctx.fillStyle = '#4a3728';
-  ctx.shadowBlur = 10;
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.fillStyle = '#e2e8f0'; // slate-200 base
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = 'rgba(0,0,0,0.2)';
+  
+  // Base frame rectangles
   ctx.fillRect(dims.offsetX - borderThickness, dims.offsetY - borderThickness, dims.fieldWidth + borderThickness * 2, borderThickness);
   ctx.fillRect(dims.offsetX - borderThickness, dims.offsetY + dims.fieldHeight, dims.fieldWidth + borderThickness * 2, borderThickness);
   ctx.fillRect(dims.offsetX - borderThickness, dims.offsetY, borderThickness, dims.fieldHeight);
   ctx.fillRect(dims.offsetX + dims.fieldWidth, dims.offsetY, borderThickness, dims.fieldHeight);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath();
-    ctx.moveTo(dims.offsetX, dims.offsetY - borderThickness + 3 + i * 3);
-    ctx.lineTo(dims.offsetX + dims.fieldWidth, dims.offsetY - borderThickness + 3 + i * 3);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(dims.offsetX, dims.offsetY + dims.fieldHeight + 3 + i * 3);
-    ctx.lineTo(dims.offsetX + dims.fieldWidth, dims.offsetY + dims.fieldHeight + 3 + i * 3);
-    ctx.stroke();
-  }
+  
+  // Inner metallic shadow contour
+  ctx.strokeStyle = '#94a3b8'; // slate-400
+  ctx.lineWidth = 4;
+  ctx.strokeRect(dims.offsetX, dims.offsetY, dims.fieldWidth, dims.fieldHeight);
+  
+  // Outer glossy highlight contour
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(dims.offsetX - borderThickness + 1.5, dims.offsetY - borderThickness + 1.5, dims.fieldWidth + borderThickness * 2 - 3, dims.fieldHeight + borderThickness * 2 - 3);
   ctx.restore();
 
   // Sand territory — captured cells rendered with textured sand blocks
@@ -111,40 +151,74 @@ export function renderFrame(
   if (!sandPattern) sandPattern = ctx.createPattern(patCanvas, 'repeat')!;
   
   ctx.save();
-  ctx.fillStyle = sandPattern;
-  historyStack.forEach((path, i) => {
-    ctx.save();
-    ctx.translate(dims.offsetX, dims.offsetY);
-    if (i === historyStack.length - 1 && captureWaveProgress < 1) {
-      // Animated pour for the latest capture
-      ctx.clip(path);
-      const maxRadius = Math.max(dims.fieldWidth, dims.fieldHeight) * 1.5;
-      const currentRadius = maxRadius * captureWaveProgress;
-      ctx.beginPath();
-      ctx.arc(spiderPos.x, spiderPos.y, currentRadius, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fill(path);
+  const maxHitRadius = Math.max(dims.fieldWidth, dims.fieldHeight) * 1.5;
+  const currRadiusSq = Math.pow(maxHitRadius * captureWaveProgress, 2);
+
+  historyStack.forEach((mask, i) => {
+    const isLatest = i === historyStack.length - 1;
+
+    // 1. Draw the textured sand blocks for this capture
+    ctx.beginPath();
+    for (let y = 0; y < GRID_H; y++) {
+      for (let x = 0; x < GRID_W; x++) {
+        if (mask[y * GRID_W + x] === 1) {
+          const rx = dims.offsetX + x * cellW;
+          const ry = dims.offsetY + y * cellH;
+          if (isLatest && captureWaveProgress < 1) {
+            // Apply radial clip radius logic for Animated Pour
+            const dx = (x * cellW) - spiderPos.x;
+            const dy = (y * cellH) - spiderPos.y;
+            if (dx * dx + dy * dy > currRadiusSq) continue;
+          }
+          ctx.rect(rx, ry, cellW + 0.5, cellH + 0.5);
+        }
+      }
     }
-    ctx.restore();
-  });
-  ctx.restore();
+    ctx.fillStyle = sandPattern!;
+    ctx.fill();
 
-  // Legacy seams — historical borders now inside captured territory, drawn as faint lines
-  ctx.save();
-  ctx.strokeStyle = 'rgba(180, 120, 40, 0.55)';
-  ctx.lineWidth = 3.75;
-  ctx.shadowBlur = 4;
-  ctx.shadowColor = 'rgba(200, 140, 60, 0.4)';
-  historyStack.forEach(path => {
+    // 2. Draw Legacy Edges: 1px seams over the fill for this specific capture
     ctx.save();
-    ctx.translate(dims.offsetX, dims.offsetY);
-    ctx.stroke(path);
+    if (isLatest && captureWaveProgress < 1) {
+      // clip the stroke to the expanding radial pour as well
+      ctx.beginPath();
+      ctx.arc(dims.offsetX + spiderPos.x, dims.offsetY + spiderPos.y, Math.sqrt(currRadiusSq), 0, Math.PI * 2);
+      ctx.clip();
+    }
+    
+    ctx.beginPath();
+    for (let y = 0; y < GRID_H; y++) {
+      for (let x = 0; x < GRID_W; x++) {
+        if (mask[y * GRID_W + x] === 1) {
+          const rx = dims.offsetX + x * cellW;
+          const ry = dims.offsetY + y * cellH;
+          // Top edge
+          if (y === 0 || mask[(y - 1) * GRID_W + x] === 0) {
+            ctx.moveTo(rx, ry); ctx.lineTo(rx + cellW, ry);
+          }
+          // Bottom edge
+          if (y === GRID_H - 1 || mask[(y + 1) * GRID_W + x] === 0) {
+            ctx.moveTo(rx, ry + cellH); ctx.lineTo(rx + cellW, ry + cellH);
+          }
+          // Left edge
+          if (x === 0 || mask[y * GRID_W + (x - 1)] === 0) {
+            ctx.moveTo(rx, ry); ctx.lineTo(rx, ry + cellH);
+          }
+          // Right edge
+          if (x === GRID_W - 1 || mask[y * GRID_W + (x + 1)] === 0) {
+            ctx.moveTo(rx + cellW, ry); ctx.lineTo(rx + cellW, ry + cellH);
+          }
+        }
+      }
+    }
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)'; // A dim red/orange stroke for legacy outlines
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.restore();
   });
   ctx.restore();
 
-  // Territory border lines — draw a bright edge wherever captured meets uncaptured
+  // Territory border lines — draw a bright edge wherever captured meets uncaptured on the global grid
   ctx.save();
   ctx.strokeStyle = 'rgba(245, 190, 80, 0.9)';
   ctx.lineWidth = 2;
@@ -341,11 +415,11 @@ export function renderFrame(
   if (isOnSafe) {
     ctx.save();
     ctx.shadowBlur = 18;
-    ctx.shadowColor = '#F5B840';
-    ctx.strokeStyle = 'rgba(245,184,64,0.8)';
-    ctx.lineWidth = 2;
+    ctx.shadowColor = '#38bdf8'; // sky-400 theme 
+    ctx.strokeStyle = 'rgba(56,189,248,0.8)';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(drawX, drawY, 17, 0, Math.PI * 2);
+    ctx.arc(drawX, drawY, 20, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -354,37 +428,15 @@ export function renderFrame(
   ctx.translate(drawX, drawY);
   ctx.rotate(bucketAngle);
 
-  // Drop shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.beginPath();
-  ctx.ellipse(2, 2, 13, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Bucket rim/body
-  ctx.fillStyle = '#7C4A1E';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 13, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Sand inside
-  ctx.fillStyle = '#E8A840';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 10, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Sand highlights
-  ctx.fillStyle = 'rgba(255,230,140,0.55)';
-  ctx.beginPath(); ctx.arc(-3, -2, 2.5, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = 'rgba(255,210,100,0.4)';
-  ctx.beginPath(); ctx.arc(2, 1, 1.5, 0, Math.PI * 2); ctx.fill();
-
-  // Handle arc at leading edge
-  ctx.strokeStyle = '#4A2A0E';
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(0, -1, 9, Math.PI * 1.15, Math.PI * 1.85);
-  ctx.stroke();
-
+  if (bucketImg.complete) {
+    ctx.drawImage(bucketImg, -20, -20, 40, 40);
+  } else {
+    // Fallback
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
   ctx.restore();
 }

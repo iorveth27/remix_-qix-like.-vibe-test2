@@ -44,11 +44,13 @@ export default function App() {
   const damageFlash = useRef(0);
   const fuseTimer = useRef(0);
   const grid = useRef<Uint8Array>(new Uint8Array(GRID_W * GRID_H));
-  const historyStack = useRef<Path2D[]>([]);
+  const seamsH = useRef<Uint8Array>(new Uint8Array(GRID_W * GRID_H)); // horizontal seam edges (below cell y)
+  const seamsV = useRef<Uint8Array>(new Uint8Array(GRID_W * GRID_H)); // vertical seam edges (right of cell x)
+  const historyStack = useRef<Uint8Array[]>([]);
   const trailParticles = useRef<Particle[]>([]);
   const trail = useRef<Point[]>([]);
   const invalidLoop = useRef<Point[]>([]);
-  const sparks = useRef<{ pos: Point; dir: Point; migrating: boolean; migrateTarget: Point | null }[]>([]);
+  const sparks = useRef<{ pos: Point; dir: Point; migrating: boolean; migrateTarget: Point | null; migratePath: Point[] }[]>([]);
   const isOnSafe = useRef<boolean>(true);
   const isTrailing = useRef<boolean>(false);
   const lastTime = useRef<number>(0);
@@ -89,8 +91,8 @@ export default function App() {
     trail.current = [];
     invalidLoop.current = [];
     sparks.current = [
-      { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false, migrateTarget: null },
-      { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false, migrateTarget: null },
+      { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false, migrateTarget: null, migratePath: [] },
+      { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false, migrateTarget: null, migratePath: [] },
     ];
     isOnSafe.current = true;
     isTrailing.current = false;
@@ -119,13 +121,23 @@ export default function App() {
       if (!containerRef.current) return;
       const { width, height } = containerRef.current.getBoundingClientRect();
 
+      // Reserve vertical space for the bulky 3D HUD
+      const UI_HEIGHT_RESERVE = 110;
+      const MAX_AVAIL_HEIGHT = height - UI_HEIGHT_RESERVE - (height * FIELD_MARGIN);
+
       let fWidth, fHeight;
-      if (width / height > ASPECT_RATIO) {
-        fHeight = height * (1 - FIELD_MARGIN * 2);
+      if (width / MAX_AVAIL_HEIGHT > ASPECT_RATIO) {
+        // constrained by height
+        fHeight = MAX_AVAIL_HEIGHT;
         fWidth = fHeight * ASPECT_RATIO;
       } else {
+        // constrained by width
         fWidth = width * (1 - FIELD_MARGIN * 2);
         fHeight = fWidth / ASPECT_RATIO;
+        if (fHeight > MAX_AVAIL_HEIGHT) {
+           fHeight = MAX_AVAIL_HEIGHT;
+           fWidth = fHeight * ASPECT_RATIO;
+        }
       }
 
       setDimensions({
@@ -134,7 +146,7 @@ export default function App() {
         fieldWidth: fWidth,
         fieldHeight: fHeight,
         offsetX: (width - fWidth) / 2,
-        offsetY: (height - fHeight) / 2,
+        offsetY: UI_HEIGHT_RESERVE + (height - UI_HEIGHT_RESERVE - fHeight) / 2,
       });
     };
 
@@ -179,10 +191,17 @@ export default function App() {
       // 1. Stamp trail into the grid as safe.
       //    Use Bresenham lines between consecutive trail points so that sharp
       //    corners don't leave 1-cell diagonal gaps the Qix flood-fill can sneak through.
+      const stampSeams = (x: number, y: number) => {
+        if (y < GRID_H - 1) seamsH.current[y * GRID_W + x] = 1;
+        if (y > 0) seamsH.current[(y - 1) * GRID_W + x] = 1;
+        if (x < GRID_W - 1) seamsV.current[y * GRID_W + x] = 1;
+        if (x > 0) seamsV.current[y * GRID_W + (x - 1)] = 1;
+      };
       for (let ti = 0; ti < trail.current.length; ti++) {
         const gp = getGridPos(trail.current[ti]);
         if (ti === 0) {
           grid.current[gp.y * GRID_W + gp.x] = 1;
+          stampSeams(gp.x, gp.y);
         } else {
           const prev = getGridPos(trail.current[ti - 1]);
           let x = prev.x, y = prev.y;
@@ -190,7 +209,10 @@ export default function App() {
           const dy = -Math.abs(gp.y - prev.y), sy = prev.y < gp.y ? 1 : -1;
           let err = dx + dy;
           while (true) {
-            if (x >= 0 && x < GRID_W && y >= 0 && y < GRID_H) grid.current[y * GRID_W + x] = 1;
+            if (x >= 0 && x < GRID_W && y >= 0 && y < GRID_H) {
+              grid.current[y * GRID_W + x] = 1;
+              stampSeams(x, y);
+            }
             if (x === gp.x && y === gp.y) break;
             const e2 = 2 * err;
             if (e2 >= dy) { err += dy; x += sx; }
@@ -204,14 +226,33 @@ export default function App() {
       const qixGP = getGridPos(qixPos.current);
       const visited = new Uint8Array(GRID_W * GRID_H);
 
-      if (!isSafe(qixGP.x, qixGP.y)) {
-        const queue: [number, number][] = [[qixGP.x, qixGP.y]];
-        visited[qixGP.y * GRID_W + qixGP.x] = 1;
+      // Find actual BFS seed: Qix cell if uncaptured, else nearest uncaptured cell
+      let seedX = qixGP.x, seedY = qixGP.y;
+      let foundSeed = !isSafe(seedX, seedY);
+      if (!foundSeed) {
+        // Qix landed on captured territory — scan outward for nearest uncaptured cell
+        const scanV = new Uint8Array(GRID_W * GRID_H);
+        const scanQ: [number, number][] = [[seedX, seedY]];
+        scanV[seedY * GRID_W + seedX] = 1;
+        outerScan: while (scanQ.length > 0) {
+          const [cx, cy] = scanQ.shift()!;
+          for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]] as [number,number][]) {
+            const nx = cx + ddx, ny = cy + ddy;
+            if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+            if (scanV[ny * GRID_W + nx]) continue;
+            scanV[ny * GRID_W + nx] = 1;
+            if (!isSafe(nx, ny)) { seedX = nx; seedY = ny; foundSeed = true; break outerScan; }
+            scanQ.push([nx, ny]);
+          }
+        }
+      }
 
+      if (foundSeed) {
+        const queue: [number, number][] = [[seedX, seedY]];
+        visited[seedY * GRID_W + seedX] = 1;
         while (queue.length > 0) {
           const [cx, cy] = queue.shift()!;
-          const neighbors: [number, number][] = [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]];
-          for (const [nx, ny] of neighbors) {
+          for (const [nx, ny] of [[cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]] as [number,number][]) {
             if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && !isSafe(nx, ny) && !visited[ny * GRID_W + nx]) {
               visited[ny * GRID_W + nx] = 1;
               queue.push([nx, ny]);
@@ -221,15 +262,19 @@ export default function App() {
       }
 
       // 3. Everything not reachable from the Qix gets filled (skip border cells first)
+      //    Guard: only run if we found a valid BFS seed; if not, the field is already
+      //    fully captured and visited is all-zeros — running would falsely capture everything.
       captureWaveMask.current = new Uint8Array(GRID_W * GRID_H);
-      captureWaveProgress.current = 0;
-      for (let i = 0; i < GRID_W * GRID_H; i++) {
-        const x = i % GRID_W;
-        const y = Math.floor(i / GRID_W);
-        const onBorder = x === 0 || x === GRID_W - 1 || y === 0 || y === GRID_H - 1;
-        if (!visited[i] && !onBorder) {
-          if (grid.current[i] !== 1) captureWaveMask.current[i] = 1;
-          grid.current[i] = 1;
+      captureWaveProgress.current = foundSeed ? 0 : 1;
+      if (foundSeed) {
+        for (let i = 0; i < GRID_W * GRID_H; i++) {
+          const x = i % GRID_W;
+          const y = Math.floor(i / GRID_W);
+          const onBorder = x === 0 || x === GRID_W - 1 || y === 0 || y === GRID_H - 1;
+          if (!visited[i] && !onBorder) {
+            if (grid.current[i] !== 1) captureWaveMask.current[i] = 1;
+            grid.current[i] = 1;
+          }
         }
       }
 
@@ -270,34 +315,82 @@ export default function App() {
         }
       }
 
-      // Delayed Edge Migration: sparks now inside captured territory get a BFS-computed
-      // target on the nearest active perimeter. They will rush straight to it.
+      // Delayed Edge Migration: sparks now inside captured territory navigate along
+      // seam lines (historic borders) to find their way to the active perimeter.
+      // The full path is stored as world-coordinate waypoints so movement code follows it step-by-step.
       sparks.current = sparks.current.map(spark => {
         const sgp = getGridPos(spark.pos);
-        if (isSafe(sgp.x, sgp.y) && !isPerimeter(sgp.x, sgp.y)) {
-          // BFS from spark's grid cell to nearest active perimeter cell
+        if (!(isSafe(sgp.x, sgp.y) && !isPerimeter(sgp.x, sgp.y))) return spark;
+
+        const isSeamAdjacent = (x: number, y: number) =>
+          (seamsH.current[y * GRID_W + x] ||
+           (y > 0 && seamsH.current[(y - 1) * GRID_W + x]) ||
+           seamsV.current[y * GRID_W + x] ||
+           (x > 0 && seamsV.current[y * GRID_W + (x - 1)])) ? true : false;
+
+        const cellToWorld = (gx: number, gy: number): Point => ({
+          x: (gx / (GRID_W - 1)) * dimensions.fieldWidth,
+          y: (gy / (GRID_H - 1)) * dimensions.fieldHeight,
+        });
+
+        const reconstructPath = (parent: Int32Array, endIdx: number, startIdx: number): Point[] => {
+          const cells: number[] = [];
+          let cur = endIdx;
+          while (cur !== startIdx && parent[cur] !== -1) {
+            cells.unshift(cur);
+            cur = parent[cur];
+          }
+          return cells.map(idx => cellToWorld(idx % GRID_W, Math.floor(idx / GRID_W)));
+        };
+
+        const startIdx = sgp.y * GRID_W + sgp.x;
+
+        // Phase 1: BFS along seam-adjacent safe cells, tracking parents for path reconstruction
+        let migratePath: Point[] = [];
+        let found = false;
+        {
           const bV = new Uint8Array(GRID_W * GRID_H);
+          const bParent = new Int32Array(GRID_W * GRID_H).fill(-1);
           const bQ: [number, number][] = [[sgp.x, sgp.y]];
-          bV[sgp.y * GRID_W + sgp.x] = 1;
-          let tCell: [number, number] | null = null;
-          bfsMig: while (bQ.length > 0) {
+          bV[startIdx] = 1;
+          bfsP1: while (bQ.length > 0) {
             const [cx, cy] = bQ.shift()!;
             for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]] as [number,number][]) {
               const nx = cx + ddx, ny = cy + ddy;
               if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
-              if (bV[ny * GRID_W + nx]) continue;
-              bV[ny * GRID_W + nx] = 1;
-              if (isSafe(nx, ny) && isPerimeter(nx, ny)) { tCell = [nx, ny]; break bfsMig; }
+              const nIdx = ny * GRID_W + nx;
+              if (bV[nIdx]) continue;
+              bV[nIdx] = 1;
+              bParent[nIdx] = cy * GRID_W + cx;
+              if (!isSafe(nx, ny)) continue;
+              if (isPerimeter(nx, ny)) { migratePath = reconstructPath(bParent, nIdx, startIdx); found = true; break bfsP1; }
+              if (isSeamAdjacent(nx, ny)) bQ.push([nx, ny]);
+            }
+          }
+        }
+
+        // Phase 2: fallback — unconstrained safe-cell BFS to nearest perimeter
+        if (!found) {
+          const bV = new Uint8Array(GRID_W * GRID_H);
+          const bParent = new Int32Array(GRID_W * GRID_H).fill(-1);
+          const bQ: [number, number][] = [[sgp.x, sgp.y]];
+          bV[startIdx] = 1;
+          bfsP2: while (bQ.length > 0) {
+            const [cx, cy] = bQ.shift()!;
+            for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]] as [number,number][]) {
+              const nx = cx + ddx, ny = cy + ddy;
+              if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+              const nIdx = ny * GRID_W + nx;
+              if (bV[nIdx]) continue;
+              bV[nIdx] = 1;
+              bParent[nIdx] = cy * GRID_W + cx;
+              if (isSafe(nx, ny) && isPerimeter(nx, ny)) { migratePath = reconstructPath(bParent, nIdx, startIdx); found = true; break bfsP2; }
               bQ.push([nx, ny]);
             }
           }
-          const migrateTarget = tCell ? {
-            x: (tCell[0] / (GRID_W - 1)) * dimensions.fieldWidth,
-            y: (tCell[1] / (GRID_H - 1)) * dimensions.fieldHeight,
-          } : null;
-          return { ...spark, migrating: true, migrateTarget };
         }
-        return spark;
+
+        return { ...spark, migrating: found, migrateTarget: null, migratePath };
       });
 
       let filledCount = 0;
@@ -345,30 +438,8 @@ export default function App() {
       fuseTimer.current = 0;
 
       // Convert the new captured area boundary into a Path2D and save to historyStack
-      const newCapturePath = new Path2D();
-      const cellW = dimensions.fieldWidth / (GRID_W - 1);
-      const cellH = dimensions.fieldHeight / (GRID_H - 1);
-      
-      for (let y = 0; y < GRID_H; y++) {
-        for (let x = 0; x < GRID_W; x++) {
-          if (captureWaveMask.current[y * GRID_W + x] !== 1) continue;
-          const rx = x * cellW;
-          const ry = y * cellH;
-          if (x + 1 < GRID_W && captureWaveMask.current[y * GRID_W + (x + 1)] !== 1) {
-            newCapturePath.moveTo(rx + cellW, ry); newCapturePath.lineTo(rx + cellW, ry + cellH);
-          }
-          if (y + 1 < GRID_H && captureWaveMask.current[(y + 1) * GRID_W + x] !== 1) {
-            newCapturePath.moveTo(rx, ry + cellH); newCapturePath.lineTo(rx + cellW, ry + cellH);
-          }
-          if (x - 1 >= 0 && captureWaveMask.current[y * GRID_W + (x - 1)] !== 1) {
-            newCapturePath.moveTo(rx, ry); newCapturePath.lineTo(rx, ry + cellH);
-          }
-          if (y - 1 >= 0 && captureWaveMask.current[(y - 1) * GRID_W + x] !== 1) {
-            newCapturePath.moveTo(rx, ry); newCapturePath.lineTo(rx + cellW, ry);
-          }
-        }
-      }
-      historyStack.current.push(newCapturePath);
+      // Save the exact cell mask of this capture to historyStack for rendering blocks and legacy edges
+      historyStack.current.push(new Uint8Array(captureWaveMask.current));
       trailParticles.current = [];
     };
 
@@ -415,10 +486,11 @@ export default function App() {
 
       spiderDir.current = Direction.NONE;
       trail.current = [];
+      trailParticles.current = [];
       invalidLoop.current = [];
       sparks.current = [
-        { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false, migrateTarget: null },
-        { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false, migrateTarget: null },
+        { pos: { x: dimensions.fieldWidth * 0.25, y: dimensions.fieldHeight }, dir: { x: -1, y: 0 }, migrating: false, migrateTarget: null, migratePath: [] },
+        { pos: { x: dimensions.fieldWidth * 0.75, y: dimensions.fieldHeight }, dir: { x:  1, y: 0 }, migrating: false, migrateTarget: null, migratePath: [] },
       ];
       isOnSafe.current = true;
       isTrailing.current = false;
@@ -563,8 +635,16 @@ export default function App() {
                   }
                 }
                 if (hitIndex >= 0) {
-                  // Store the cut-off loop for red highlight, trim trail, snap player
+                  // The user self-intersected their path.
+                  // Only trim the newly formed non-lethal loop. Leave the valid segment leading up to it alone!
                   invalidLoop.current = trail.current.slice(hitIndex);
+                  
+                  // Calculate ratio of trail we kept to precisely slice the particles array 
+                  // (since particles are pushed sequentially, the newest particles represent the loop)
+                  const keepRatio = hitIndex / Math.max(1, trail.current.length);
+                  const keepCount = Math.ceil(trailParticles.current.length * keepRatio);
+                  trailParticles.current = trailParticles.current.slice(0, keepCount);
+
                   trail.current = trail.current.slice(0, hitIndex + 1);
                   spiderPos.current = { ...trail.current[hitIndex] };
                 } else {
@@ -678,42 +758,34 @@ export default function App() {
           ];
 
           for (let si = 0; si < sparks.current.length; si++) {
-            let { pos, dir, migrating, migrateTarget } = sparks.current[si];
+            let { pos, dir, migrating, migrateTarget, migratePath } = sparks.current[si];
+            migratePath = [...migratePath]; // local copy so we can mutate safely
             let remaining = sparkSpeed * dt;
 
             while (remaining > 0) {
               const step = Math.min(remaining, 2);
               remaining -= step;
 
-              if (migrating && migrateTarget) {
-                // Aggressive migration: rush straight to the pre-computed perimeter target
-                // at 3× speed so sparks visibly threaten the player on the new border.
-                const rushStep = step * 3;
-                const dx = migrateTarget.x - pos.x;
-                const dy = migrateTarget.y - pos.y;
+              if (migrating && migratePath.length > 0) {
+                // Follow next waypoint along the seam path at normal speed
+                const wp = migratePath[0];
+                const dx = wp.x - pos.x, dy = wp.y - pos.y;
                 const dist = Math.hypot(dx, dy);
-
-                if (dist <= rushStep) {
-                  // Arrived — snap exactly, resume normal movement
-                  pos = { ...migrateTarget };
-                  migrating = false;
-                  migrateTarget = null;
-                  // Orient direction along dominant axis of final approach
-                  dir = Math.abs(dx) >= Math.abs(dy)
-                    ? { x: dx >= 0 ? 1 : -1, y: 0 }
-                    : { x: 0, y: dy >= 0 ? 1 : -1 };
+                if (dist <= step) {
+                  pos = { ...wp };
+                  migratePath.shift();
+                  if (migratePath.length === 0) {
+                    // Reached perimeter — resume normal movement
+                    migrating = false;
+                    migrateTarget = null;
+                  }
                 } else {
                   const nx = dx / dist, ny = dy / dist;
-                  pos = {
-                    x: Math.max(0, Math.min(fw, pos.x + nx * rushStep)),
-                    y: Math.max(0, Math.min(fh, pos.y + ny * rushStep)),
-                  };
-                  dir = Math.abs(nx) >= Math.abs(ny)
-                    ? { x: nx >= 0 ? 1 : -1, y: 0 }
-                    : { x: 0, y: ny >= 0 ? 1 : -1 };
+                  pos = { x: pos.x + nx * step, y: pos.y + ny * step };
+                  dir = Math.abs(nx) >= Math.abs(ny) ? { x: nx >= 0 ? 1 : -1, y: 0 } : { x: 0, y: ny >= 0 ? 1 : -1 };
                 }
               } else if (migrating) {
-                // migrateTarget is null (no perimeter found) — just clear migration
+                // Empty path (no route found) — clear migration
                 migrating = false;
               } else {
                 // Normal movement: stay on the active perimeter
@@ -761,7 +833,7 @@ export default function App() {
               }
             }
 
-            sparks.current[si] = { pos, dir, migrating, migrateTarget };
+            sparks.current[si] = { pos, dir, migrating, migrateTarget, migratePath };
           }
 
           // Spark–spark collision: reverse both when they meet
@@ -769,8 +841,8 @@ export default function App() {
             const s0 = sparks.current[0];
             const s1 = sparks.current[1];
             if (Math.hypot(s0.pos.x - s1.pos.x, s0.pos.y - s1.pos.y) < SPARK_RADIUS * 2) {
-              sparks.current[0] = { pos: s0.pos, dir: { x: -s0.dir.x, y: -s0.dir.y }, migrating: s0.migrating, migrateTarget: s0.migrateTarget };
-              sparks.current[1] = { pos: s1.pos, dir: { x: -s1.dir.x, y: -s1.dir.y }, migrating: s1.migrating, migrateTarget: s1.migrateTarget };
+              sparks.current[0] = { pos: s0.pos, dir: { x: -s0.dir.x, y: -s0.dir.y }, migrating: s0.migrating, migrateTarget: s0.migrateTarget, migratePath: s0.migratePath };
+              sparks.current[1] = { pos: s1.pos, dir: { x: -s1.dir.x, y: -s1.dir.y }, migrating: s1.migrating, migrateTarget: s1.migrateTarget, migratePath: s1.migratePath };
             }
           }
 
@@ -894,7 +966,7 @@ export default function App() {
 
       <div ref={containerRef} className="flex-1 relative flex items-center justify-center overflow-hidden">
         {/* Background */}
-        <div className="absolute inset-0 z-0 bg-black" />
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#D2EBFA] to-[#E5F5FF]" />
 
         <canvas
           ref={canvasRef}
