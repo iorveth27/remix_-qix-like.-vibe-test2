@@ -19,97 +19,122 @@ export function HUD({ isVisible, capturedPercent, lives, onPause }: HUDProps) {
           exit={{ y: -100, opacity: 0 }}
           className="absolute inset-0 pointer-events-none z-20 flex flex-col"
         >
-          {/* Top Bar */}
-          <div className="absolute top-6 left-0 right-0 h-16 pointer-events-none">
-            
-            {/* Left Header - Hearts */}
-            <div className="absolute left-6 top-0 pointer-events-auto flex justify-start items-center">
-              <div className="bg-slate-700/80 rounded-full px-3 py-1.5 flex items-center gap-1.5 border-[3px] border-black shadow-[0_4px_0_#1e293b] relative overflow-hidden">
-                {/* Glossy highlight for the hearts container */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-2 bg-white/10 rounded-full pointer-events-none" />
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div 
-                    key={i} 
-                    className="relative w-7 h-7 flex items-center justify-center transition-all duration-300"
-                    style={{ 
-                      filter: i < lives ? 'none' : 'grayscale(100%) brightness(50%)',
-                      transform: i < lives ? 'scale(1)' : 'scale(0.8)'
-                    }}
-                  >
-                    <span 
-                      className="text-2xl absolute"
-                      style={{ textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 0 #000' }}
-                    >
-                      ❤️
-                    </span>
-                  </div>
-                ))}
-              </div>
+          {/* Top Bar — glassmorphism pill */}
+          <div className="absolute top-4 left-0 right-0 flex justify-center items-center gap-3 px-4 pointer-events-none">
+
+            {/* Hearts pill */}
+            <div
+              className="flex items-center gap-1 px-3 py-2 rounded-2xl pointer-events-auto"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1.5px solid rgba(255, 200, 100, 0.3)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+              }}
+            >
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-7 h-7 flex items-center justify-center transition-all duration-300"
+                  style={{
+                    filter: i < lives ? 'none' : 'grayscale(100%) brightness(40%)',
+                    transform: i < lives ? 'scale(1)' : 'scale(0.75)',
+                  }}
+                >
+                  <span className="text-xl leading-none select-none">❤️</span>
+                </div>
+              ))}
             </div>
 
-            {/* Center Progress */}
-            <div className="absolute left-1/2 top-0 -translate-x-1/2 pointer-events-auto flex items-center mt-1">
-              {/* Progress Bar Track Wrapper (Provides the white rim + black border to harmonize styles) */}
-              <div className="bg-white rounded-full border-[3px] border-black shadow-[0_4px_0_#1e293b] p-1 flex items-center relative">
-                {/* Inner Track */}
-                <div className="w-32 sm:w-48 md:w-64 h-7 bg-[#A6C8D8] rounded-full relative shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] flex items-center p-[2px]">
-                  
-                  {/* Fill */}
-                  {capturedPercent > 0 && (
-                    <div 
-                      className="absolute left-[2px] top-[2px] bottom-[2px] bg-gradient-to-b from-[#8DEB2D] to-[#51BE0D] transition-all duration-300 rounded-full border-[2px] border-[#3F8F0D] shadow-[inset_0_1px_3px_rgba(255,255,255,0.4)] overflow-hidden" 
-                      style={{ 
-                        width: `calc(${capturedPercent}% - 4px)`,
-                        minWidth: '24px'
-                      }} 
-                    >
-                      {/* Inner highlight for glass effect */}
-                      <div className="absolute top-[1px] left-[2px] right-[2px] h-[6px] bg-gradient-to-b from-white/70 to-transparent rounded-t-full pointer-events-none" />
-                    </div>
-                  )}
-
-                  {/* Goal Star at 80% */}
-                  <div 
-                    className="absolute top-1/2 z-20 flex flex-col items-center justify-center pointer-events-none transition-all duration-300" 
-                    style={{ left: '80%', transform: 'translate(-50%, -50%) scale(1.1)' }}
-                  >
-                    <span 
-                      className="text-[20px] leading-none" 
-                      style={{ filter: 'drop-shadow(0px 2px 1px rgba(0,0,0,0.5)) drop-shadow(0px -1px 0px rgba(0,0,0,0.3))' }}
-                    >
-                      ⭐
-                    </span>
-                  </div>
+            {/* Progress bar pill */}
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-2xl pointer-events-auto"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1.5px solid rgba(255, 200, 100, 0.3)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+                minWidth: '200px',
+              }}
+            >
+              {/* Progress track — star marker sits outside overflow-hidden */}
+              <div className="relative flex-1" style={{ minWidth: '120px' }}>
+                {/* 80% star — above the bar, anchored by left% on this wrapper */}
+                <div
+                  className="absolute z-10 pointer-events-none"
+                  style={{ left: '80%', top: '-2px', transform: 'translateX(-50%)' }}
+                >
+                  <span className="text-sm leading-none" style={{ filter: 'drop-shadow(0 0 4px rgba(245,166,35,0.9))' }}>⭐</span>
                 </div>
 
-                {/* Percentage Text on the Right (Absolute so it doesn't break center alignment) */}
-                <span 
-                  className="absolute left-full ml-3 text-[24px] font-black text-white leading-none tracking-tight translate-y-[1px]" 
-                  style={{ textShadow: '-2px -2px 0 #000, 0 -2px 0 #000, 2px -2px 0 #000, 2px 0 0 #000, 2px 2px 0 #000, 0 2px 0 #000, -2px 2px 0 #000, -2px 0 0 #000, 0 5px 0 #000' }}
+                <div
+                  className="relative h-5 rounded-full overflow-hidden"
+                  style={{
+                    background: 'rgba(0,0,0,0.35)',
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
+                  }}
                 >
-                  {capturedPercent}%
-                </span>
+                  {/* Fill — multicolor desert gradient */}
+                  <div
+                    className="absolute left-0 top-0 bottom-0 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.max(capturedPercent, 2)}%`,
+                      background: 'linear-gradient(90deg, #c8380a 0%, #f5a623 40%, #f5e642 75%, #b8e832 100%)',
+                      boxShadow: '0 0 8px rgba(245,166,35,0.6)',
+                    }}
+                  >
+                    {/* Glass sheen on fill */}
+                    <div
+                      className="absolute top-0 left-0 right-0 rounded-full pointer-events-none"
+                      style={{
+                        height: '40%',
+                        background: 'linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)',
+                      }}
+                    />
+                  </div>
+
+                  {/* 80% tick mark inside the bar */}
+                  <div
+                    className="absolute top-0 bottom-0 w-px pointer-events-none"
+                    style={{ left: '80%', background: 'rgba(255,255,255,0.4)' }}
+                  />
+                </div>
               </div>
+
+              {/* Percentage */}
+              <span
+                className="text-lg font-black leading-none tabular-nums"
+                style={{
+                  color: '#fde68a',
+                  textShadow: '0 0 8px rgba(245,166,35,0.8), 0 2px 4px rgba(0,0,0,0.9)',
+                  minWidth: '42px',
+                  textAlign: 'right',
+                }}
+              >
+                {capturedPercent}%
+              </span>
             </div>
 
-            {/* Right Status - Settings */}
-            <div className="absolute right-6 top-0 pointer-events-auto flex justify-end items-center">
-              <button
-                onClick={onPause}
-                className="w-12 h-12 rounded-full bg-[#46bcf3] border-[3px] border-black shadow-[0_4px_0_#1e293b,inset_0_-4px_0_rgba(0,0,0,0.15)] flex items-center justify-center hover:bg-[#3db0e5] active:translate-y-1 active:shadow-[0_1px_0_#1e293b,inset_0_-2px_0_rgba(0,0,0,0.15)] transition-all relative overflow-hidden group"
-              >
-                {/* Bright white/cyan highlight on the button body */}
-                <div className="absolute top-1 left-2.5 w-4 h-2 bg-white/60 rounded-full -rotate-[25deg] pointer-events-none" />
-                
-                <Settings 
-                  className="w-6 h-6 text-[#f8fafc] pointer-events-none transition-transform group-hover:rotate-45 duration-300" 
-                  strokeWidth={2.5}
-                  style={{ 
-                    filter: 'drop-shadow(0px 2px 0px rgba(0,0,0,0.6)) drop-shadow(1px 1px 0px black) drop-shadow(-1px -1px 0px black) drop-shadow(1px -1px 0px black) drop-shadow(-1px 1px 0px black)' 
-                  }} 
-                />
-              </button>
-            </div>
+            {/* Settings button */}
+            <button
+              onClick={onPause}
+              className="w-11 h-11 rounded-2xl flex items-center justify-center pointer-events-auto transition-all duration-150 active:scale-95 group"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1.5px solid rgba(255, 200, 100, 0.3)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
+              }}
+            >
+              <Settings
+                className="w-5 h-5 transition-transform group-hover:rotate-45 duration-300"
+                strokeWidth={2.5}
+                style={{ color: '#fde68a', filter: 'drop-shadow(0 0 4px rgba(245,166,35,0.7))' }}
+              />
+            </button>
           </div>
         </motion.div>
       )}

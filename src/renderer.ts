@@ -108,24 +108,41 @@ function hashFloat(a: number, b: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
 }
 
+// ── Golden sand tile pattern (32×32) ─────────────────────────────────────
 const patCanvas = document.createElement('canvas');
 patCanvas.width = 32; patCanvas.height = 32;
 const patCtx = patCanvas.getContext('2d')!;
-patCtx.fillStyle = '#f9a8d4'; // Base pink
+patCtx.fillStyle = '#d4924a'; // warm gold base
 patCtx.fillRect(0, 0, 32, 32);
 for (let gy = 0; gy < 32; gy++) {
   for (let gx = 0; gx < 32; gx++) {
-    const v = hashFloat(gx * 31 + 7, gy * 17 + 3);
-    if (v < 0.15) {
-      patCtx.fillStyle = '#ffffff'; // White specks
+    const v  = hashFloat(gx * 31 + 7, gy * 17 + 3);
+    const v2 = hashFloat(gx * 13 + 5, gy * 29 + 11);
+    if (v < 0.12) {
+      patCtx.fillStyle = '#f5d47a'; // bright gold sparkle
       patCtx.fillRect(gx, gy, 1, 1);
-    } else if (v > 0.85) {
-      patCtx.fillStyle = '#be185d'; // Dark pink specks
+    } else if (v > 0.88) {
+      patCtx.fillStyle = '#8b5a20'; // dark amber grain
+      patCtx.fillRect(gx, gy, 1, 1);
+    } else if (v2 > 0.92) {
+      patCtx.fillStyle = '#fde68a'; // white-gold glint
       patCtx.fillRect(gx, gy, 1, 1);
     }
   }
 }
 let sandPattern: CanvasPattern | null = null;
+
+// ── Pre-generate star positions for the background sky ───────────────────
+const STAR_COUNT = 80;
+const stars: { x: number; y: number; r: number; twinkle: number }[] = [];
+for (let i = 0; i < STAR_COUNT; i++) {
+  stars.push({
+    x:       hashFloat(i * 37 + 1, i * 13 + 7),
+    y:       hashFloat(i * 53 + 3, i * 19 + 5) * 0.65, // concentrate in upper 65%
+    r:       0.5 + hashFloat(i * 97, i * 41) * 1.2,
+    twinkle: hashFloat(i * 23, i * 67) * Math.PI * 2,
+  });
+}
 
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
@@ -142,9 +159,56 @@ export function renderFrame(
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Black void field background
-  ctx.fillStyle = '#000000';
+  // ── Desert-dusk starry sky background (whole canvas) ─────────────────────
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  skyGrad.addColorStop(0,   '#0d0820'); // deep midnight purple
+  skyGrad.addColorStop(0.4, '#1a1040'); // dusk purple-blue
+  skyGrad.addColorStop(0.7, '#2d1b6e'); // warm violet horizon
+  skyGrad.addColorStop(0.88,'#7c3e1a'); // amber sunset band
+  skyGrad.addColorStop(1,   '#3d1a06'); // dark sienna sand floor
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Stars
+  const t = animationTime / 1000;
+  ctx.save();
+  for (const star of stars) {
+    const sx = star.x * canvas.width;
+    const sy = star.y * canvas.height;
+    const alpha = 0.5 + 0.5 * Math.sin(t * 0.8 + star.twinkle);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle   = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, star.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Sand dune silhouette at canvas bottom
+  ctx.save();
+  ctx.fillStyle = '#1a0a02';
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height);
+  const duneW = canvas.width;
+  const duneBaseY = canvas.height;
+  ctx.lineTo(0, duneBaseY - canvas.height * 0.06);
+  ctx.quadraticCurveTo(duneW * 0.15, duneBaseY - canvas.height * 0.14, duneW * 0.32, duneBaseY - canvas.height * 0.07);
+  ctx.quadraticCurveTo(duneW * 0.48, duneBaseY - canvas.height * 0.00, duneW * 0.60, duneBaseY - canvas.height * 0.09);
+  ctx.quadraticCurveTo(duneW * 0.75, duneBaseY - canvas.height * 0.18, duneW * 0.88, duneBaseY - canvas.height * 0.08);
+  ctx.quadraticCurveTo(duneW * 0.95, duneBaseY - canvas.height * 0.03, duneW, duneBaseY - canvas.height * 0.05);
+  ctx.lineTo(duneW, canvas.height);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Desert sand void inside game field (dark sand, not pure black)
+  ctx.save();
+  const fieldBg = ctx.createLinearGradient(dims.offsetX, dims.offsetY, dims.offsetX, dims.offsetY + dims.fieldHeight);
+  fieldBg.addColorStop(0, '#0a0510');
+  fieldBg.addColorStop(1, '#1a0e04');
+  ctx.fillStyle = fieldBg;
   ctx.fillRect(dims.offsetX, dims.offsetY, dims.fieldWidth, dims.fieldHeight);
+  ctx.restore();
 
   // Damage flash / screen shake
   if (damageFlash > 0) {
@@ -157,22 +221,35 @@ export function renderFrame(
     ctx.restore();
   }
 
-  // Glossy plastic/metal borders
+  // ── Warm wooden/sand frame border ────────────────────────────────────────
   const borderThickness = 14;
   ctx.save();
-  ctx.fillStyle = '#e2e8f0';
-  ctx.shadowBlur = 15;
-  ctx.shadowColor = 'rgba(0,0,0,0.2)';
+  const frameGrad = ctx.createLinearGradient(
+    dims.offsetX - borderThickness, dims.offsetY - borderThickness,
+    dims.offsetX - borderThickness + borderThickness * 2 + dims.fieldWidth, dims.offsetY - borderThickness + borderThickness * 2 + dims.fieldHeight,
+  );
+  frameGrad.addColorStop(0,   '#c8832a');
+  frameGrad.addColorStop(0.3, '#e8a84a');
+  frameGrad.addColorStop(0.7, '#b86820');
+  frameGrad.addColorStop(1,   '#8b4a10');
+  ctx.fillStyle = frameGrad;
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = 'rgba(200, 120, 40, 0.5)';
   ctx.fillRect(dims.offsetX - borderThickness, dims.offsetY - borderThickness, dims.fieldWidth + borderThickness * 2, borderThickness);
   ctx.fillRect(dims.offsetX - borderThickness, dims.offsetY + dims.fieldHeight, dims.fieldWidth + borderThickness * 2, borderThickness);
   ctx.fillRect(dims.offsetX - borderThickness, dims.offsetY, borderThickness, dims.fieldHeight);
   ctx.fillRect(dims.offsetX + dims.fieldWidth, dims.offsetY, borderThickness, dims.fieldHeight);
-  ctx.strokeStyle = '#94a3b8';
-  ctx.lineWidth = 4;
+  // Bright amber inner edge line
+  ctx.strokeStyle = 'rgba(255, 210, 100, 0.9)';
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = '#ffcc50';
   ctx.strokeRect(dims.offsetX, dims.offsetY, dims.fieldWidth, dims.fieldHeight);
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(dims.offsetX - borderThickness + 1.5, dims.offsetY - borderThickness + 1.5, dims.fieldWidth + borderThickness * 2 - 3, dims.fieldHeight + borderThickness * 2 - 3);
+  // Outer highlight
+  ctx.strokeStyle = 'rgba(255, 240, 180, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.shadowBlur = 0;
+  ctx.strokeRect(dims.offsetX - borderThickness + 1, dims.offsetY - borderThickness + 1, dims.fieldWidth + borderThickness * 2 - 2, dims.fieldHeight + borderThickness * 2 - 2);
   ctx.restore();
 
   const cellW = dims.fieldWidth  / (GRID_W - 1);
@@ -230,11 +307,11 @@ export function renderFrame(
   ctx.stroke();
   ctx.restore();
 
-  // ── LINE (2) cells — bright green border markers ──────────────────────────
+  // ── LINE (2) cells — warm amber captured border ──────────────────────────
   ctx.save();
-  ctx.fillStyle = '#00ee44';
-  ctx.shadowBlur = 4;
-  ctx.shadowColor = 'rgba(0, 238, 68, 0.6)';
+  ctx.fillStyle = '#e8a840';
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = 'rgba(232, 168, 64, 0.7)';
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
       if (grid[y * GRID_W + x] === CELL.LINE) {
@@ -246,11 +323,11 @@ export function renderFrame(
   }
   ctx.restore();
 
-  // ── NEWLINE (3) cells — bright blue active trail ──────────────────────────
+  // ── NEWLINE (3) cells — white-hot active trail glow ──────────────────────
   ctx.save();
-  ctx.fillStyle = 'rgba(40, 130, 255, 0.9)';
-  ctx.shadowBlur = 5;
-  ctx.shadowColor = 'rgba(40, 130, 255, 0.8)';
+  ctx.fillStyle = 'rgba(255, 240, 160, 0.95)';
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = 'rgba(255, 210, 80, 0.9)';
   for (let y = 0; y < GRID_H; y++) {
     for (let x = 0; x < GRID_W; x++) {
       if (grid[y * GRID_W + x] === CELL.NEWLINE) {
@@ -401,12 +478,12 @@ export function renderFrame(
   const drawX = dims.offsetX + spiderPos.x;
   const drawY = dims.offsetY + spiderPos.y;
 
-  // Safe-zone ring when on border
+  // Safe-zone warm glow ring when on border
   if (playerOnBorder) {
     ctx.save();
-    ctx.shadowBlur  = 18;
-    ctx.shadowColor = '#38bdf8';
-    ctx.strokeStyle = 'rgba(56,189,248,0.8)';
+    ctx.shadowBlur  = 20;
+    ctx.shadowColor = 'rgba(245, 180, 60, 0.9)';
+    ctx.strokeStyle = 'rgba(245, 200, 80, 0.75)';
     ctx.lineWidth   = 3;
     ctx.beginPath();
     ctx.arc(drawX, drawY, 20, 0, Math.PI * 2);

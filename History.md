@@ -30,3 +30,6 @@
 28. Bug: sometimes the spider gets damaged for no reason at all (died without touching a spark)
 29. Bug #1: web doesn't fully cover captured territory. Bug #2: sparks don't move to new borders after capture
 30. Task: Refactor the Qix game engine to a Hybrid Casual Sand Aesthetic — bucket sprite replacing spider, sandy grain trail, sand CanvasPattern with wave-reveal for captured territory, warm amber palette for borders/seams/HUD, black void background, sand grain death explosion
+31. Implement QIX Classic Gameplay Rewrite: 5-type cell grid (EDGE/LINE/NEWLINE/FILLED/EMPTY), dual-seed BFS fill, Verlet QIX wandering, spark grid-junction patrol, Ghost Edge Traversal
+32. Bug: cannot leave border with joystick + tiny trail fills entire territory — fixed degenerate trail overlap detection and same-cell NEWLINE position advancement in player.ts
+33. read product requirements.md analyze the screenshot and redesign the app according to the new guidelines — implemented desert-dusk PRD redesign: starry night sky with sand dune silhouette, golden gritty sand texture for FILLED cells, warm amber frame border, white-hot NEWLINE trail glow, amber LINE cells, glassmorphism HUD top bar

@@ -325,7 +325,7 @@ export default function App() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black flex flex-col overflow-hidden touch-none select-none font-sans">
+    <div className="fixed inset-0 flex flex-col overflow-hidden touch-none select-none font-sans" style={{ background: '#0d0820' }}>
       <HUD
         isVisible={gameState === 'PLAYING'}
         capturedPercent={capturedPercent}
@@ -334,8 +334,7 @@ export default function App() {
       />
 
       <div ref={containerRef} className="flex-1 relative flex items-center justify-center overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#D2EBFA] to-[#E5F5FF]" />
+
 
         <canvas
           ref={canvasRef}
