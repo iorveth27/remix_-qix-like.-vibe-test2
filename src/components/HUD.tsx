@@ -64,7 +64,7 @@ export function HUD({ isVisible, capturedPercent, lives, onPause }: HUDProps) {
                 {/* 80% star — above the bar, anchored by left% on this wrapper */}
                 <div
                   className="absolute z-10 pointer-events-none"
-                  style={{ left: '80%', top: '-2px', transform: 'translateX(-50%)' }}
+                  style={{ left: '80%', top: '-7px', transform: 'translateX(-50%)' }}
                 >
                   <span style={{ fontSize: 36, lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(180,120,0,0.9)) drop-shadow(0 0 14px rgba(255,200,0,0.5))' }}>⭐</span>
                 </div>

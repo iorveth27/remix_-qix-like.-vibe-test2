@@ -23,8 +23,10 @@ export interface GameState {
   spiderDir: Direction;
   /** Active drawing trail (world-space waypoints) */
   trail: Point[];
-  /** Kept for visual compatibility; always empty in new system */
+  /** Points of the most recent self-intersecting loop, shown in red */
   invalidLoop: Point[];
+  /** Countdown (seconds) until invalidLoop is cleared; 0 = already cleared */
+  invalidLoopTimer: number;
   /** True when player is on LINE/EDGE border (not drawing) */
   playerOnBorder: boolean;
   /** True when player is actively drawing a trail through EMPTY space */
@@ -81,6 +83,7 @@ export function createGameState(): GameState {
     spiderDir: Direction.NONE,
     trail: [],
     invalidLoop: [],
+    invalidLoopTimer: 0,
     playerOnBorder: true,
     playerDrawing: false,
     trailParticles: [],

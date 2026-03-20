@@ -221,6 +221,10 @@ export default function App() {
         // Flash timers
         if (state.captureFlash > 0) state.captureFlash -= dt;
         if (state.damageFlash  > 0) state.damageFlash  -= dt;
+        if (state.invalidLoopTimer > 0) {
+          state.invalidLoopTimer -= dt;
+          if (state.invalidLoopTimer <= 0) { state.invalidLoop = []; state.invalidLoopTimer = 0; }
+        }
 
         tickParticles(state, dt);
 
@@ -244,6 +248,7 @@ export default function App() {
         trailParticles:      state.trailParticles,
         trail:               state.trail,
         invalidLoop:         state.invalidLoop,
+        invalidLoopTimer:    state.invalidLoopTimer,
         playerDrawing:       state.playerDrawing,
         playerOnBorder:      state.playerOnBorder,
         spiderPos:           state.spiderPos,

@@ -6,6 +6,7 @@ export interface RenderState {
   trailParticles: Particle[];
   trail: Point[];
   invalidLoop: Point[];
+  invalidLoopTimer: number;
   playerDrawing: boolean;
   playerOnBorder: boolean;
   spiderPos: Point;
@@ -151,7 +152,7 @@ export function renderFrame(
   state: RenderState,
 ) {
   const {
-    grid, trailParticles, trail, invalidLoop, playerDrawing, playerOnBorder,
+    grid, trailParticles, trail, invalidLoop, invalidLoopTimer, playerDrawing, playerOnBorder,
     spiderPos, particles, floatingTexts, captureFlash, damageFlash, qixPos, sparks,
     sparksEnabled, bossEnabled, fuseProgress, animationTime, bucketAngle, bucketTilt, bucketPitch,
     captureWaveProgress, isMoving
@@ -338,6 +339,26 @@ export function renderFrame(
     }
   }
   ctx.restore();
+
+  // ── Invalid loop — red highlight (fades over 1.5 s) ──────────────────────
+  if (invalidLoop.length > 1 && invalidLoopTimer > 0) {
+    const alpha = Math.min(1, invalidLoopTimer / 0.4); // fade during last 0.4 s
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = 'rgba(255, 60, 60, 0.9)';
+    ctx.lineWidth   = 3;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    ctx.shadowBlur  = 10;
+    ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.moveTo(dims.offsetX + invalidLoop[0].x, dims.offsetY + invalidLoop[0].y);
+    for (let i = 1; i < invalidLoop.length; i++) {
+      ctx.lineTo(dims.offsetX + invalidLoop[i].x, dims.offsetY + invalidLoop[i].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Current trail — sandy grain dots
   if (playerDrawing && trail.length > 1 && trailParticles.length > 0) {

@@ -125,9 +125,26 @@ export function tickPlayer(
     } else if (state.playerDrawing) {
       if (isTrailCell(state.grid, nextGP.x, nextGP.y)) {
         if (nextGP.x !== currGP.x || nextGP.y !== currGP.y) {
-          // Crossed a different NEWLINE cell — lethal self-intersection
-          onDeath();
-          return;
+          // Non-lethal self-intersection — find loop start in trail, trim it off
+          let loopStartIdx = -1;
+          for (let ti = 1; ti < state.trail.length; ti++) {
+            const tgp = getGridPos(state.trail[ti], dims);
+            if (tgp.x === nextGP.x && tgp.y === nextGP.y) { loopStartIdx = ti; break; }
+          }
+          if (loopStartIdx !== -1) {
+            // Revert the loop's grid cells back to EMPTY (keep intersection cell as NEWLINE)
+            for (let ti = loopStartIdx + 1; ti < state.trail.length; ti++) {
+              const tgp = getGridPos(state.trail[ti], dims);
+              if (state.grid[tgp.y * GRID_W + tgp.x] === CELL.NEWLINE) {
+                state.grid[tgp.y * GRID_W + tgp.x] = CELL.EMPTY;
+              }
+            }
+            state.invalidLoop      = state.trail.slice(loopStartIdx);
+            state.invalidLoopTimer = 1.5;
+            state.trail            = state.trail.slice(0, loopStartIdx + 1);
+          }
+          state.spiderPos = nextPos;
+          continue;
         }
         // Still inside the same grid cell we already marked — just advance world pos
         state.spiderPos = nextPos;
