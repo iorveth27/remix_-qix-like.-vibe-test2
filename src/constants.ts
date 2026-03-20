@@ -29,4 +29,4 @@ export const WIN_PERCENT = 80;
 export const QIX_WANDER_JITTER = 0.3;
 
 // ─── HUD layout ────────────────────────────────────────────────────────────
-export const UI_HEIGHT_RESERVE = 110;
+export const UI_HEIGHT_RESERVE = 90;

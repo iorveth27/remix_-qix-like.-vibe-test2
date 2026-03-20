@@ -118,7 +118,7 @@ patCtx.fillStyle = '#d4924a'; // warm gold base
 patCtx.fillRect(0, 0, 32, 32);
 for (let gy = 0; gy < 32; gy++) {
   for (let gx = 0; gx < 32; gx++) {
-    const v  = hashFloat(gx * 31 + 7, gy * 17 + 3);
+    const v = hashFloat(gx * 31 + 7, gy * 17 + 3);
     const v2 = hashFloat(gx * 13 + 5, gy * 29 + 11);
     if (v < 0.12) {
       patCtx.fillStyle = '#f5d47a'; // bright gold sparkle
@@ -139,9 +139,9 @@ const STAR_COUNT = 80;
 const stars: { x: number; y: number; r: number; twinkle: number }[] = [];
 for (let i = 0; i < STAR_COUNT; i++) {
   stars.push({
-    x:       hashFloat(i * 37 + 1, i * 13 + 7),
-    y:       hashFloat(i * 53 + 3, i * 19 + 5) * 0.65, // concentrate in upper 65%
-    r:       0.5 + hashFloat(i * 97, i * 41) * 1.2,
+    x: hashFloat(i * 37 + 1, i * 13 + 7),
+    y: hashFloat(i * 53 + 3, i * 19 + 5) * 0.65, // concentrate in upper 65%
+    r: 0.5 + hashFloat(i * 97, i * 41) * 1.2,
     twinkle: hashFloat(i * 23, i * 67) * Math.PI * 2,
   });
 }
@@ -163,11 +163,11 @@ export function renderFrame(
 
   // ── Desert-dusk starry sky background (whole canvas) ─────────────────────
   const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  skyGrad.addColorStop(0,   '#0d0820'); // deep midnight purple
+  skyGrad.addColorStop(0, '#0d0820'); // deep midnight purple
   skyGrad.addColorStop(0.4, '#1a1040'); // dusk purple-blue
   skyGrad.addColorStop(0.7, '#2d1b6e'); // warm violet horizon
-  skyGrad.addColorStop(0.88,'#7c3e1a'); // amber sunset band
-  skyGrad.addColorStop(1,   '#3d1a06'); // dark sienna sand floor
+  skyGrad.addColorStop(0.88, '#7c3e1a'); // amber sunset band
+  skyGrad.addColorStop(1, '#3d1a06'); // dark sienna sand floor
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -179,7 +179,7 @@ export function renderFrame(
     const sy = star.y * canvas.height;
     const alpha = 0.5 + 0.5 * Math.sin(t * 0.8 + star.twinkle);
     ctx.globalAlpha = alpha;
-    ctx.fillStyle   = '#ffffff';
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(sx, sy, star.r, 0, Math.PI * 2);
     ctx.fill();
@@ -224,16 +224,16 @@ export function renderFrame(
   }
 
   // ── Warm wooden/sand frame border ────────────────────────────────────────
-  const borderThickness = 14;
+  const borderThickness = 10;
   ctx.save();
   const frameGrad = ctx.createLinearGradient(
     dims.offsetX - borderThickness, dims.offsetY - borderThickness,
     dims.offsetX - borderThickness + borderThickness * 2 + dims.fieldWidth, dims.offsetY - borderThickness + borderThickness * 2 + dims.fieldHeight,
   );
-  frameGrad.addColorStop(0,   '#c8832a');
+  frameGrad.addColorStop(0, '#c8832a');
   frameGrad.addColorStop(0.3, '#e8a84a');
   frameGrad.addColorStop(0.7, '#b86820');
-  frameGrad.addColorStop(1,   '#8b4a10');
+  frameGrad.addColorStop(1, '#8b4a10');
   ctx.fillStyle = frameGrad;
   ctx.shadowBlur = 12;
   ctx.shadowColor = 'rgba(200, 120, 40, 0.5)';
@@ -254,7 +254,7 @@ export function renderFrame(
   ctx.strokeRect(dims.offsetX - borderThickness + 1, dims.offsetY - borderThickness + 1, dims.fieldWidth + borderThickness * 2 - 2, dims.fieldHeight + borderThickness * 2 - 2);
   ctx.restore();
 
-  const cellW = dims.fieldWidth  / (GRID_W - 1);
+  const cellW = dims.fieldWidth / (GRID_W - 1);
   const cellH = dims.fieldHeight / (GRID_H - 1);
   if (!sandPattern) sandPattern = ctx.createPattern(patCanvas, 'repeat')!;
 
@@ -347,10 +347,10 @@ export function renderFrame(
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = 'rgba(255, 60, 60, 0.9)';
-    ctx.lineWidth   = 3;
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
-    ctx.shadowBlur  = 10;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowBlur = 10;
     ctx.shadowColor = 'rgba(255, 0, 0, 0.7)';
     ctx.beginPath();
     ctx.moveTo(dims.offsetX + invalidLoop[0].x, dims.offsetY + invalidLoop[0].y);
@@ -407,27 +407,27 @@ export function renderFrame(
     const velX = qixTrail.length > 0 ? qixPos.x - qixTrail[0].x : 0;
     const velY = qixTrail.length > 0 ? qixPos.y - qixTrail[0].y : 0;
     const velAngle = Math.atan2(velY, velX);
-    const velMag   = Math.hypot(velX, velY);
+    const velMag = Math.hypot(velX, velY);
     // stretchAmt 0–1: how much to elongate along velocity axis
     const stretchAmt = Math.min(velMag / 3, 1);
 
     // Draw ghost trail segments (most recent = index 0, oldest = last)
     const allPositions = [qixPos, ...qixTrail];
     for (let seg = allPositions.length - 1; seg >= 1; seg--) {
-      const pos    = allPositions[seg];
-      const alpha  = 0.12 * (1 - seg / allPositions.length);
-      const scale  = 1 - seg / allPositions.length * 0.6;
+      const pos = allPositions[seg];
+      const alpha = 0.12 * (1 - seg / allPositions.length);
+      const scale = 1 - seg / allPositions.length * 0.6;
       const sx = dims.offsetX + pos.x;
       const sy = dims.offsetY + pos.y;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.shadowBlur  = 12;
+      ctx.shadowBlur = 12;
       ctx.shadowColor = 'rgba(255, 0, 255, 0.6)';
       for (let i = 0; i < 6; i++) {
         const angle = t * 1.8 + (i * Math.PI / 3);
         const baseLen = (36 + Math.sin(t * 2.5 + i * 1.3) * 14) * scale;
         ctx.strokeStyle = qixColors[i];
-        ctx.lineWidth   = 2 * scale;
+        ctx.lineWidth = 2 * scale;
         ctx.beginPath();
         ctx.moveTo(sx, sy);
         ctx.lineTo(sx + Math.cos(angle) * baseLen, sy + Math.sin(angle) * baseLen);
@@ -443,13 +443,13 @@ export function renderFrame(
     ctx.shadowBlur = 35;
     ctx.shadowColor = 'rgba(255, 0, 255, 0.95)';
     for (let i = 0; i < 6; i++) {
-      const angle   = t * 1.8 + (i * Math.PI / 3);
+      const angle = t * 1.8 + (i * Math.PI / 3);
       const baseLen = 36 + Math.sin(t * 2.5 + i * 1.3) * 14;
       // Squash/stretch: arms aligned with velocity get longer, perpendicular get shorter
-      const dot     = Math.cos(angle - velAngle);
-      const len     = baseLen * (1 + dot * 0.45 * stretchAmt);
+      const dot = Math.cos(angle - velAngle);
+      const len = baseLen * (1 + dot * 0.45 * stretchAmt);
       ctx.strokeStyle = qixColors[i];
-      ctx.lineWidth   = 3;
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(qx, qy);
       ctx.lineTo(qx + Math.cos(angle) * len, qy + Math.sin(angle) * len);
@@ -472,12 +472,12 @@ export function renderFrame(
 
   // Particles
   particles.forEach(p => {
-    const px    = dims.offsetX + p.pos.x;
-    const py    = dims.offsetY + p.pos.y;
+    const px = dims.offsetX + p.pos.x;
+    const py = dims.offsetY + p.pos.y;
     const alpha = p.life / p.maxLife;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle   = p.color;
+    ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(px, py, p.size, 0, Math.PI * 2);
     ctx.fill();
@@ -490,10 +490,10 @@ export function renderFrame(
     const ty = dims.offsetY + ft.pos.y;
     ctx.save();
     ctx.globalAlpha = ft.life / ft.maxLife;
-    ctx.fillStyle   = '#F5C86E';
-    ctx.font        = 'bold 20px Inter';
-    ctx.textAlign   = 'center';
-    ctx.shadowBlur  = 10;
+    ctx.fillStyle = '#F5C86E';
+    ctx.font = 'bold 20px Inter';
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 10;
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.fillText(ft.text, tx, ty);
     ctx.restore();
@@ -502,16 +502,16 @@ export function renderFrame(
   // Sparks
   if (sparksEnabled) for (let si = 0; si < sparks.length; si++) {
     const spark = sparks[si];
-    const sx    = dims.offsetX + spark.pos.x;
-    const sy    = dims.offsetY + spark.pos.y;
+    const sx = dims.offsetX + spark.pos.x;
+    const sy = dims.offsetY + spark.pos.y;
     const phase = animationTime / 80 + si * Math.PI;
     const alpha = spark.migrating ? 0.35 : 1; // ghost sparks are translucent
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur  = spark.migrating ? 6 : 18;
+    ctx.shadowBlur = spark.migrating ? 6 : 18;
     ctx.shadowColor = '#ffdd00';
     ctx.strokeStyle = `rgba(255, 220, 0, ${0.6 + 0.4 * Math.sin(phase)})`;
-    ctx.lineWidth   = 2;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(sx, sy, 7 + Math.sin(phase * 1.3) * 2, 0, Math.PI * 2);
     ctx.stroke();
@@ -521,7 +521,7 @@ export function renderFrame(
     ctx.fill();
     if (!spark.migrating) {
       ctx.strokeStyle = '#ffdd00';
-      ctx.lineWidth   = 1;
+      ctx.lineWidth = 1;
       for (let j = 0; j < 4; j++) {
         const angle = phase + j * (Math.PI / 2);
         const r1 = 5, r2 = 9 + Math.sin(phase * 2 + j) * 3;
@@ -541,10 +541,10 @@ export function renderFrame(
   // Safe-zone warm glow ring when on border
   if (playerOnBorder) {
     ctx.save();
-    ctx.shadowBlur  = 20;
+    ctx.shadowBlur = 20;
     ctx.shadowColor = 'rgba(245, 180, 60, 0.9)';
     ctx.strokeStyle = 'rgba(245, 200, 80, 0.75)';
-    ctx.lineWidth   = 3;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(drawX, drawY, 20, 0, Math.PI * 2);
     ctx.stroke();
