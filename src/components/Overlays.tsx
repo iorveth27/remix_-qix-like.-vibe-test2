@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, RotateCcw, ArrowRight, Sparkles } from 'lucide-react';
+import { Play, RotateCcw, ArrowRight } from 'lucide-react';
 
 type GameStage = 'PLAYING' | 'LEVEL_CLEAR' | 'DISSOLVE' | 'INTERSTITIAL' | 'GAMEOVER';
 
@@ -10,23 +10,21 @@ interface OverlaysProps {
   capturedPercent: number;
   level: number;
   score: number;
-  levelBonus: number;
   sparksEnabled: boolean;
   bossEnabled: boolean;
   fuseEnabled: boolean;
   onToggleSparks: () => void;
   onToggleBoss: () => void;
   onToggleFuse: () => void;
-  onReveal: () => void;
   onRestart: () => void;
   onResume: () => void;
   onNextLevel: () => void;
 }
 
 export function Overlays({
-  gameStage, isPaused, capturedPercent, level, score, levelBonus,
+  gameStage, isPaused, capturedPercent, level, score,
   sparksEnabled, bossEnabled, fuseEnabled,
-  onToggleSparks, onToggleBoss, onToggleFuse, onReveal, onRestart, onResume, onNextLevel,
+  onToggleSparks, onToggleBoss, onToggleFuse, onRestart, onResume, onNextLevel,
 }: OverlaysProps) {
   return (
     <AnimatePresence>
@@ -56,33 +54,7 @@ export function Overlays({
         </motion.div>
       )}
 
-      {gameStage === 'LEVEL_CLEAR' && (
-        <motion.div
-          key="levelclear"
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="z-10 bg-black/80 backdrop-blur-2xl p-10 rounded-[48px] border-2 border-amber-500/30 flex flex-col items-center gap-4 shadow-[0_0_40px_rgba(251,191,36,0.3)] text-white"
-        >
-          <h2 className="text-4xl font-sans font-bold tracking-tight text-amber-400">
-            Level {level} Clear!
-          </h2>
-          <p
-            className="text-2xl font-black tabular-nums"
-            style={{ color: '#fbbf24', textShadow: '0 0 20px rgba(251,191,36,0.6)' }}
-          >
-            +{levelBonus.toLocaleString()} pts
-          </p>
-          <button
-            onClick={onReveal}
-            className="flex items-center justify-center w-full py-4 bg-amber-500 text-black rounded-full font-bold text-lg transition-all hover:bg-amber-400 active:scale-95 shadow-[0_0_20px_rgba(251,191,36,0.4)] mt-2"
-          >
-            <Sparkles className="mr-2 w-5 h-5" />
-            Reveal!
-          </button>
-        </motion.div>
-      )}
-
-      {gameStage === 'INTERSTITIAL' && (
+{gameStage === 'INTERSTITIAL' && (
         <motion.div
           key="interstitial"
           initial={{ opacity: 0, scale: 0.9 }}

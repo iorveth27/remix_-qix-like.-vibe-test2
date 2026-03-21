@@ -93,12 +93,13 @@ export function tickSparks(
         }
 
         if (candidates.length === 0) {
-          // Completely isolated — BFS through any cell to find nearest walkable
+          // Completely isolated — BFS through non-EMPTY cells, send to walkable
+          // cell farthest from player to avoid spawning right on top of them.
           const bfsV = new Uint8Array(GRID_W * GRID_H);
           const bfsQ: [number, number][] = [[gx, gy]];
           bfsV[gy * GRID_W + gx] = 1;
-          let found = false;
-          while (bfsQ.length > 0 && !found) {
+          let bestGX = -1, bestGY = -1, bestDist = -1;
+          while (bfsQ.length > 0) {
             const [bx, by] = bfsQ.shift()!;
             for (const d of DIRS) {
               const nx = bx + d.x, ny = by + d.y;
@@ -106,15 +107,13 @@ export function tickSparks(
               if (bfsV[ny * GRID_W + nx]) continue;
               bfsV[ny * GRID_W + nx] = 1;
               if (isWalkable(state.grid, nx, ny)) {
-                migrating = true;
-                targetGX  = nx;
-                targetGY  = ny;
-                found     = true;
-                break;
+                const dist = Math.abs(nx - playerGP.x) + Math.abs(ny - playerGP.y);
+                if (dist > bestDist) { bestDist = dist; bestGX = nx; bestGY = ny; }
               }
               if (state.grid[ny * GRID_W + nx] !== CELL.EMPTY) bfsQ.push([nx, ny]);
             }
           }
+          if (bestGX >= 0) { migrating = true; targetGX = bestGX; targetGY = bestGY; }
           remaining = 0;
           break;
         }

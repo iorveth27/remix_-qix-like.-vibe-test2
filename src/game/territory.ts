@@ -145,38 +145,34 @@ export function fillCapturedArea(state: GameState, dims: Dimensions): number {
   }
 
   // ── 7. Ghost-edge traversal: sparks isolated by the new capture ──────────
+  const playerGP = getGridPos(state.spiderPos, dims);
   for (const spark of state.sparks) {
     if (spark.migrating) continue; // already in ghost mode
-    // Check whether the spark has at least one walkable neighbor
-    let hasEscape = isWalkable(grid, spark.gx, spark.gy);
-    if (hasEscape) {
+    if (isWalkable(grid, spark.gx, spark.gy)) continue; // still on active border — fine
+    // Spark is stranded: BFS through non-EMPTY cells to find all reachable walkable
+    // cells, then send it to the one farthest from the player (avoids instant death).
+    const bv  = new Uint8Array(GRID_W * GRID_H);
+    const bq: [number, number][] = [[spark.gx, spark.gy]];
+    bv[spark.gy * GRID_W + spark.gx] = 1;
+    let bestGX = -1, bestGY = -1, bestDist = -1;
+    while (bq.length > 0) {
+      const [bx, by] = bq.shift()!;
       for (const [ddx, ddy] of DIRS4) {
-        if (isWalkable(grid, spark.gx + ddx, spark.gy + ddy)) { hasEscape = true; break; }
+        const nx = bx + ddx, ny = by + ddy;
+        if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+        if (bv[ny * GRID_W + nx]) continue;
+        bv[ny * GRID_W + nx] = 1;
+        if (isWalkable(grid, nx, ny)) {
+          const d = Math.abs(nx - playerGP.x) + Math.abs(ny - playerGP.y);
+          if (d > bestDist) { bestDist = d; bestGX = nx; bestGY = ny; }
+        }
+        if (grid[ny * GRID_W + nx] !== CELL.EMPTY) bq.push([nx, ny]);
       }
     }
-    if (!hasEscape) {
-      // BFS through any non-EMPTY cell to find nearest walkable — ghost mode
-      const bv  = new Uint8Array(GRID_W * GRID_H);
-      const bq: [number, number][] = [[spark.gx, spark.gy]];
-      bv[spark.gy * GRID_W + spark.gx] = 1;
-      let found = false;
-      while (bq.length > 0 && !found) {
-        const [bx, by] = bq.shift()!;
-        for (const [ddx, ddy] of DIRS4) {
-          const nx = bx + ddx, ny = by + ddy;
-          if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
-          if (bv[ny * GRID_W + nx]) continue;
-          bv[ny * GRID_W + nx] = 1;
-          if (isWalkable(grid, nx, ny)) {
-            spark.migrating = true;
-            spark.targetGX  = nx;
-            spark.targetGY  = ny;
-            found = true;
-            break;
-          }
-          bq.push([nx, ny]);
-        }
-      }
+    if (bestGX >= 0) {
+      spark.migrating = true;
+      spark.targetGX  = bestGX;
+      spark.targetGY  = bestGY;
     }
   }
 

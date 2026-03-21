@@ -31,6 +31,7 @@ export interface RenderState {
   bucketPitch: number;
   captureWaveProgress: number;
   showFullArt: boolean;
+  levelClearProgress: number; // 0→1 over LEVEL_CLEAR_DELAY, drives the flash transition
 }
 
 const BUCKET_SVG = `<svg width="84" height="84" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -247,7 +248,7 @@ export function renderFrame(
     spiderPos, particles, floatingTexts, captureFlash, damageFlash, qixEntities, dissolveParticles,
     isDissolving, dissolveTimer, level, sparks,
     sparksEnabled, bossEnabled, fuseProgress, animationTime, bucketTilt, bucketPitch,
-    captureWaveProgress, showFullArt,
+    captureWaveProgress, showFullArt, levelClearProgress,
   } = state;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -737,5 +738,21 @@ export function renderFrame(
   }
 
   ctx.restore();
+
+  // ── Level-clear transition flash: golden bloom that sweeps in then fades ──
+  if (levelClearProgress > 0) {
+    // sin curve: peaks at ~40% through the delay, fully gone by 100%
+    const flashAlpha = Math.sin(levelClearProgress * Math.PI) * 0.55;
+    const grad = ctx.createRadialGradient(
+      dims.offsetX + dims.fieldWidth / 2, dims.offsetY + dims.fieldHeight / 2, 0,
+      dims.offsetX + dims.fieldWidth / 2, dims.offsetY + dims.fieldHeight / 2,
+      Math.max(dims.fieldWidth, dims.fieldHeight) * 0.75,
+    );
+    grad.addColorStop(0,   `rgba(255, 230, 80, ${flashAlpha})`);
+    grad.addColorStop(0.5, `rgba(255, 140, 20, ${flashAlpha * 0.6})`);
+    grad.addColorStop(1,   `rgba(0, 0, 0, 0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(dims.offsetX, dims.offsetY, dims.fieldWidth, dims.fieldHeight);
+  }
 
 }

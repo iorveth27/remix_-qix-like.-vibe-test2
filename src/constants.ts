@@ -36,7 +36,7 @@ export const LEVEL_SPEED_SCALE = 1.1;
 export const DISSOLVE_JITTER_TIME = 0.5;
 export const DISSOLVE_GRAVITY = 900;
 export const BONUS_PER_PERCENT = 1000;
-export const LEVEL_CLEAR_DELAY = 2.0;
+export const LEVEL_CLEAR_DELAY = 1.2;
 export const LEVEL_PALETTES: { base: string; bright: string; dark: string; glint: string }[] = [
   { base: '#d4924a', bright: '#f5d47a', dark: '#8b5a20', glint: '#fde68a' },
   { base: '#4a8cd4', bright: '#7abcff', dark: '#2a5090', glint: '#c0dcff' },

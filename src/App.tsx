@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ASPECT_RATIO, BONUS_PER_PERCENT, CELL, DISSOLVE_GRAVITY, DISSOLVE_JITTER_TIME,
-  FIELD_MARGIN, FUSE_MAX_TIME, GRID_H, GRID_W, LEVEL_PALETTES,
+  FIELD_MARGIN, FUSE_MAX_TIME, GRID_H, GRID_W, LEVEL_CLEAR_DELAY, LEVEL_PALETTES,
   UI_HEIGHT_RESERVE, WIN_PERCENT,
 } from './constants';
 import { Direction, type Dimensions, type DissolveParticle, type QixEntity } from './types';
@@ -81,17 +81,11 @@ export default function App() {
   const fuseEnabledRef      = useRef(true);
   const hasStarted = useRef(false);
   const highscoreRef = useRef(parseInt(localStorage.getItem('highscore') ?? '0', 10));
+  const levelClearTimerRef = useRef(0);
 
   const setStage = (s: GameStage) => {
     gameStageRef.current = s;
     setGameStage(s);
-  };
-
-  const handleReveal = () => {
-    const state = gs.current;
-    state.dissolveParticles = createDissolveParticles(state, dimensions);
-    state.dissolveTimer = 0;
-    setStage('DISSOLVE');
   };
 
   useEffect(() => { isPausedRef.current  = isPaused;  }, [isPaused]);
@@ -267,14 +261,24 @@ export default function App() {
       state.playerDrawing  = false;
       state.fuseTimer      = 0;
 
-      // Reset sparks to border positions
-      const spark1gx = Math.round(0.25 * (GRID_W - 1));
-      const spark1gy = GRID_H - 1;
-      const spark2gx = Math.round(0.75 * (GRID_W - 1));
-      const spark2gy = GRID_H - 1;
+      // Reset sparks to the walkable cells farthest from the player's respawn position
+      const respawnGP = getGridPos(bestPos, dimensions);
+      const sparkCandidates: { gx: number; gy: number; dist: number }[] = [];
+      for (let i = 0; i < GRID_W * GRID_H; i++) {
+        const cgx = i % GRID_W, cgy = Math.floor(i / GRID_W);
+        if (isWalkable(state.grid, cgx, cgy)) {
+          sparkCandidates.push({ gx: cgx, gy: cgy, dist: Math.abs(cgx - respawnGP.x) + Math.abs(cgy - respawnGP.y) });
+        }
+      }
+      sparkCandidates.sort((a, b) => b.dist - a.dist);
+      const sp1 = sparkCandidates[0] ?? { gx: Math.round(0.25 * (GRID_W - 1)), gy: GRID_H - 1 };
+      // sp2: farthest candidate that's also well-separated from sp1
+      const sp2 = sparkCandidates.find(c => Math.abs(c.gx - sp1.gx) + Math.abs(c.gy - sp1.gy) > GRID_W / 3)
+               ?? sparkCandidates[1]
+               ?? { gx: Math.round(0.75 * (GRID_W - 1)), gy: GRID_H - 1 };
       state.sparks = [
-        { pos: gridToWorld(spark1gx, spark1gy, dimensions), gx: spark1gx, gy: spark1gy, dir: { x: -1, y: 0 }, type: 'chaser',  migrating: false, targetGX: spark1gx, targetGY: spark1gy },
-        { pos: gridToWorld(spark2gx, spark2gy, dimensions), gx: spark2gx, gy: spark2gy, dir: { x:  1, y: 0 }, type: 'random', migrating: false, targetGX: spark2gx, targetGY: spark2gy },
+        { pos: gridToWorld(sp1.gx, sp1.gy, dimensions), gx: sp1.gx, gy: sp1.gy, dir: { x: -1, y: 0 }, type: 'chaser',  migrating: false, targetGX: sp1.gx, targetGY: sp1.gy },
+        { pos: gridToWorld(sp2.gx, sp2.gy, dimensions), gx: sp2.gx, gy: sp2.gy, dir: { x:  1, y: 0 }, type: 'random', migrating: false, targetGX: sp2.gx, targetGY: sp2.gy },
       ];
     };
 
@@ -344,10 +348,18 @@ export default function App() {
             setHighscore(state.score);
             localStorage.setItem('highscore', String(state.score));
           }
+          levelClearTimerRef.current = 0;
           setStage('LEVEL_CLEAR');
         }
       } else if (stage === 'LEVEL_CLEAR') {
         gs.current.animationTime += dt * 1000;
+        levelClearTimerRef.current += dt;
+        if (levelClearTimerRef.current >= LEVEL_CLEAR_DELAY) {
+          const state = gs.current;
+          state.dissolveParticles = createDissolveParticles(state, dimensions);
+          state.dissolveTimer = 0;
+          setStage('DISSOLVE');
+        }
       } else if (stage === 'DISSOLVE') {
         const state = gs.current;
         state.animationTime += dt * 1000;
@@ -399,6 +411,7 @@ export default function App() {
         bucketPitch:         state.bucketPitch,
         captureWaveProgress: state.captureWaveProgress,
         showFullArt:         stage === 'DISSOLVE' || stage === 'INTERSTITIAL',
+        levelClearProgress:  stage === 'LEVEL_CLEAR' ? Math.min(levelClearTimerRef.current / LEVEL_CLEAR_DELAY, 1) : 0,
       });
 
       requestRef.current = requestAnimationFrame(update);
@@ -486,14 +499,12 @@ export default function App() {
           capturedPercent={capturedPercent}
           level={level}
           score={score}
-          levelBonus={levelBonus}
           sparksEnabled={sparksEnabled}
           bossEnabled={bossEnabled}
           fuseEnabled={fuseEnabled}
           onToggleSparks={() => setSparksEnabled(v => !v)}
           onToggleBoss={() => setBossEnabled(v => !v)}
           onToggleFuse={() => setFuseEnabled(v => !v)}
-          onReveal={handleReveal}
           onRestart={() => {
             setIsPaused(false);
             startGame(dimensions);
