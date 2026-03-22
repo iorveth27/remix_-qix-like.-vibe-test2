@@ -657,38 +657,87 @@ export function renderFrame(
     ctx.restore();
   });
 
-  // Sparks
+  // Crabs (sparks)
   if (sparksEnabled) for (let si = 0; si < sparks.length; si++) {
     const spark = sparks[si];
     const sx = dims.offsetX + spark.pos.x;
     const sy = dims.offsetY + spark.pos.y;
-    const phase = animationTime / 80 + si * Math.PI;
-    const alpha = spark.migrating ? 0.35 : 1; // ghost sparks are translucent
+    const phase = animationTime / 200 + si * Math.PI;
+    const scuttle = spark.migrating ? 0 : Math.sin(phase * 4) * 1.2; // vertical scuttle bob
+    const alpha = spark.migrating ? 0.35 : 1;
+
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowBlur = spark.migrating ? 6 : 18;
-    ctx.shadowColor = '#ffdd00';
-    ctx.strokeStyle = `rgba(255, 220, 0, ${0.6 + 0.4 * Math.sin(phase)})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(sx, sy, 7 + Math.sin(phase * 1.3) * 2, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = spark.migrating ? 'rgba(200,200,255,0.6)' : '#fff8c0';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
-    ctx.fill();
-    if (!spark.migrating) {
-      ctx.strokeStyle = '#ffdd00';
-      ctx.lineWidth = 1;
-      for (let j = 0; j < 4; j++) {
-        const angle = phase + j * (Math.PI / 2);
-        const r1 = 5, r2 = 9 + Math.sin(phase * 2 + j) * 3;
-        ctx.beginPath();
-        ctx.moveTo(sx + Math.cos(angle) * r1, sy + Math.sin(angle) * r1);
-        ctx.lineTo(sx + Math.cos(angle) * r2, sy + Math.sin(angle) * r2);
-        ctx.stroke();
-      }
+    ctx.translate(sx, sy + scuttle);
+
+    const bodyColor   = spark.migrating ? '#9999cc' : '#e05030';
+    const shellColor  = spark.migrating ? '#7777aa' : '#c03820';
+    const clawColor   = spark.migrating ? '#8888bb' : '#d04428';
+
+    // Shadow glow
+    ctx.shadowBlur  = spark.migrating ? 6 : 14;
+    ctx.shadowColor = spark.migrating ? 'rgba(150,150,255,0.5)' : 'rgba(220,60,20,0.6)';
+
+    // --- Legs (3 each side, animated) ---
+    ctx.strokeStyle = bodyColor;
+    ctx.lineWidth = 1.2;
+    for (let leg = 0; leg < 3; leg++) {
+      const legPhase = spark.migrating ? 0 : Math.sin(phase * 4 + leg * 0.8) * 2.5;
+      // Left legs
+      ctx.beginPath();
+      ctx.moveTo(-5, -1 + leg * 2.5);
+      ctx.lineTo(-11, 2 + leg * 2.5 + legPhase);
+      ctx.stroke();
+      // Right legs
+      ctx.beginPath();
+      ctx.moveTo(5, -1 + leg * 2.5);
+      ctx.lineTo(11, 2 + leg * 2.5 - legPhase);
+      ctx.stroke();
     }
+
+    // --- Claws ---
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = clawColor;
+    const clawWave = spark.migrating ? 0 : Math.sin(phase * 2) * 1.5;
+    // Left claw
+    ctx.beginPath();
+    ctx.moveTo(-5, -3);
+    ctx.lineTo(-12, -6 + clawWave);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(-12, -6 + clawWave, 3, 0, Math.PI * 2);
+    ctx.fillStyle = clawColor;
+    ctx.fill();
+    // Right claw
+    ctx.beginPath();
+    ctx.moveTo(5, -3);
+    ctx.lineTo(12, -6 - clawWave);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(12, -6 - clawWave, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // --- Body (oval shell) ---
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Shell highlight stripe
+    ctx.fillStyle = shellColor;
+    ctx.beginPath();
+    ctx.ellipse(0, -1, 5, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // --- Eyes (on stalks) ---
+    const eyeBob = spark.migrating ? 0 : Math.sin(phase * 3) * 0.5;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-3, -6 + eyeBob, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 3, -6 - eyeBob, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(-3, -6 + eyeBob, 0.9, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 3, -6 - eyeBob, 0.9, 0, Math.PI * 2); ctx.fill();
+
     ctx.restore();
   }
 
