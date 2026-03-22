@@ -1,6 +1,38 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings } from 'lucide-react';
+
+const DIGIT_STRIP = '0123456789';
+
+function AnimatedDigit({ digit, fontSize }: { digit: string; fontSize: number }) {
+  const h = fontSize * 1.25;
+  const idx = DIGIT_STRIP.indexOf(digit);
+  return (
+    <span style={{ display: 'inline-block', overflow: 'hidden', height: h, verticalAlign: 'middle' }}>
+      <motion.span
+        animate={{ y: -idx * h }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        style={{ display: 'flex', flexDirection: 'column' }}
+      >
+        {DIGIT_STRIP.split('').map(d => (
+          <span key={d} style={{ height: h, lineHeight: `${h}px`, display: 'block' }}>{d}</span>
+        ))}
+      </motion.span>
+    </span>
+  );
+}
+
+function AnimatedCounter({ value, fontSize }: { value: number; fontSize: number }) {
+  const digits = String(value).split('');
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+      {digits.map((digit, i) => (
+        <AnimatedDigit key={digits.length - i} digit={digit} fontSize={fontSize} />
+      ))}
+    </span>
+  );
+}
+
 interface HUDProps {
   isVisible: boolean;
   level: number;
@@ -10,7 +42,7 @@ interface HUDProps {
 }
 
 export function HUD({ isVisible, level, capturedPercent, goalPercent, onPause }: HUDProps) {
-  const current = Math.round(capturedPercent);
+  const remaining = Math.max(0, goalPercent - Math.round(capturedPercent));
   return (
     <AnimatePresence>
       {isVisible && (
@@ -58,14 +90,19 @@ export function HUD({ isVisible, level, capturedPercent, goalPercent, onPause }:
               }}
             >
               <span
-                className="font-black tabular-nums leading-none"
+                className="font-black tabular-nums"
                 style={{
                   fontSize: '22px',
                   color: '#fde68a',
                   textShadow: '0 0 8px rgba(245,166,35,0.8), 0 2px 4px rgba(0,0,0,0.9)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
               >
-                {current}%<span style={{ fontSize: '13px', opacity: 0.6 }}> / {goalPercent}%</span>
+                <span style={{ opacity: 0.6 }}>Goal:</span>
+                <AnimatedCounter value={remaining} fontSize={22} />
+                <span>%</span>
               </span>
             </div>
 
