@@ -3,14 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Settings } from 'lucide-react';
 interface HUDProps {
   isVisible: boolean;
-  lives: number;
   level: number;
   capturedPercent: number;
   goalPercent: number;
   onPause: () => void;
 }
 
-export function HUD({ isVisible, lives, level, capturedPercent, goalPercent, onPause }: HUDProps) {
+export function HUD({ isVisible, level, capturedPercent, goalPercent, onPause }: HUDProps) {
   const current = Math.round(capturedPercent);
   return (
     <AnimatePresence>
@@ -22,31 +21,6 @@ export function HUD({ isVisible, lives, level, capturedPercent, goalPercent, onP
           className="absolute inset-0 pointer-events-none z-20 flex flex-col"
         >
           <div className="absolute top-4 left-0 right-0 flex justify-center items-center gap-3 px-4 pointer-events-none">
-
-            {/* Lives pill */}
-            <div
-              className="flex items-center gap-1 px-3 py-2 rounded-2xl pointer-events-auto"
-              style={{
-                background: 'rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1.5px solid rgba(255, 200, 100, 0.3)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
-              }}
-            >
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-7 h-7 flex items-center justify-center transition-all duration-300"
-                  style={{
-                    filter: i < lives ? 'none' : 'grayscale(100%) brightness(40%)',
-                    transform: i < lives ? 'scale(1)' : 'scale(0.75)',
-                  }}
-                >
-                  <span className="text-xl leading-none select-none">❤️</span>
-                </div>
-              ))}
-            </div>
 
             {/* Progress — centered */}
             <div

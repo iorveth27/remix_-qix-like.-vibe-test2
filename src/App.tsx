@@ -18,7 +18,7 @@ import { Joystick } from './components/Joystick';
 import { Overlays } from './components/Overlays';
 import { createGameState } from './game/GameState';
 import type { GameState } from './game/GameState';
-import { getGridPos, gridToWorld, isWalkable } from './game/grid';
+import { gridToWorld } from './game/grid';
 import { fillCapturedArea } from './game/territory';
 import { tickPlayer } from './game/player';
 import { tickQixEntity } from './game/qix';
@@ -66,7 +66,6 @@ export default function App() {
   const [fuseEnabled,     setFuseEnabled]     = useState(() => localStorage.getItem('fuseEnabled') !== 'false');
   const [dimensions,      setDimensions]      = useState<Dimensions>({ width: 0, height: 0, fieldWidth: 0, fieldHeight: 0, offsetX: 0, offsetY: 0 });
   const [capturedPercent, setCapturedPercent] = useState(0);
-  const [lives,           setLives]           = useState(3);
   const [level,           setLevel]           = useState(1);
   const [loopKey,         setLoopKey]         = useState(0);
   const [ftueHint,        setFtueHint]        = useState<string | null>(null);
@@ -143,14 +142,13 @@ export default function App() {
     };
   };
 
-  const startGame = (dims: Dimensions, opts?: { level?: number; lives?: number }) => {
+  const startGame = (dims: Dimensions, opts?: { level?: number }) => {
     const lvl = opts?.level ?? 1;
     const state = createGameState(lvl);
 
     // Player starts at the middle of the top EDGE row so moving DOWN enters EMPTY immediately
     state.spiderPos = { x: dims.fieldWidth / 2, y: 0 };
 
-    state.lives = Math.min(opts?.lives ?? 3, 3);
     state.level = lvl;
 
     // Persist current level so game over restarts from here
@@ -210,7 +208,6 @@ export default function App() {
     gs.current = state;
     setLevel(lvl);
     setCapturedPercent(0);
-    setLives(state.lives);
     setStage('PLAYING');
   };
 
@@ -267,12 +264,9 @@ export default function App() {
 
     const handleDeath = () => {
       const state = gs.current;
-      state.lives      -= 1;
       state.damageFlash = 0.5;
-      setLives(state.lives);
 
-
-      // Sand grain death explosion
+      // Death explosion particles
       for (let ei = 0; ei < 150; ei++) {
         const eAngle = Math.random() * Math.PI * 2;
         const eSpeed = 60 + Math.random() * 180;
@@ -287,73 +281,7 @@ export default function App() {
         });
       }
 
-      if (state.lives <= 0) {
-        setStage('GAMEOVER');
-        return;
-      }
-
-      // Revert any active trail NEWLINE cells back to EMPTY
-      for (let i = 0; i < GRID_W * GRID_H; i++) {
-        if (state.grid[i] === CELL.NEWLINE) state.grid[i] = CELL.EMPTY;
-      }
-
-      // Respawn on the nearest EDGE/LINE cell on the physical border
-      const { x: dx, y: dy } = state.spiderPos;
-      let bestDist = Infinity;
-      let bestPos  = { x: 0, y: 0 };
-
-      const checkBorderCell = (gx: number, gy: number) => {
-        if (!isWalkable(state.grid, gx, gy)) return;
-        const wp   = gridToWorld(gx, gy, dimensions);
-        const dist = Math.hypot(wp.x - dx, wp.y - dy);
-        if (dist < bestDist) { bestDist = dist; bestPos = wp; }
-      };
-
-      // Physical border rows/cols first (EDGE cells adjacent to remaining EMPTY space)
-      for (let x = 0; x < GRID_W; x++) { checkBorderCell(x, 0); checkBorderCell(x, GRID_H - 1); }
-      for (let y = 1; y < GRID_H - 1; y++) { checkBorderCell(0, y); checkBorderCell(GRID_W - 1, y); }
-
-      // Fallback: scan all LINE cells (interior perimeter seams bordering EMPTY)
-      if (bestDist === Infinity) {
-        for (let gy = 0; gy < GRID_H; gy++) {
-          for (let gx = 0; gx < GRID_W; gx++) {
-            checkBorderCell(gx, gy);
-          }
-        }
-      }
-
-      // Last resort: top-left corner
-      if (bestDist === Infinity) bestPos = gridToWorld(0, 0, dimensions);
-
-      state.spiderPos      = bestPos;
-      state.spiderDir      = Direction.NONE;
-      state.trail          = [];
-      state.trailParticles = [];
-      state.invalidLoop    = [];
-      state.playerOnBorder = true;
-      state.playerDrawing  = false;
-      state.fuseTimer      = 0;
-
-      // Reset sparks only for levels that actually have them
-      if (state.sparks.length > 0) {
-        const respawnGP = getGridPos(bestPos, dimensions);
-        const sparkCandidates: { gx: number; gy: number; dist: number }[] = [];
-        for (let i = 0; i < GRID_W * GRID_H; i++) {
-          const cgx = i % GRID_W, cgy = Math.floor(i / GRID_W);
-          if (isWalkable(state.grid, cgx, cgy)) {
-            sparkCandidates.push({ gx: cgx, gy: cgy, dist: Math.abs(cgx - respawnGP.x) + Math.abs(cgy - respawnGP.y) });
-          }
-        }
-        sparkCandidates.sort((a, b) => b.dist - a.dist);
-        const sp1 = sparkCandidates[0] ?? { gx: Math.round(0.25 * (GRID_W - 1)), gy: GRID_H - 1 };
-        const sp2 = sparkCandidates.find(c => Math.abs(c.gx - sp1.gx) + Math.abs(c.gy - sp1.gy) > GRID_W / 3)
-                 ?? sparkCandidates[1]
-                 ?? { gx: Math.round(0.75 * (GRID_W - 1)), gy: GRID_H - 1 };
-        state.sparks = [
-          { pos: gridToWorld(sp1.gx, sp1.gy, dimensions), gx: sp1.gx, gy: sp1.gy, dir: { x: -1, y: 0 }, type: 'chaser',  migrating: false, targetGX: sp1.gx, targetGY: sp1.gy },
-          { pos: gridToWorld(sp2.gx, sp2.gy, dimensions), gx: sp2.gx, gy: sp2.gy, dir: { x:  1, y: 0 }, type: 'random', migrating: false, targetGX: sp2.gx, targetGY: sp2.gy },
-        ];
-      }
+      setStage('GAMEOVER');
     };
 
     const update = (time: number) => {
@@ -532,7 +460,6 @@ export default function App() {
     <div className="fixed inset-0 flex flex-col overflow-hidden touch-none select-none font-sans" style={{ background: '#0d0820' }}>
       <HUD
         isVisible={gameStage === 'PLAYING' || gameStage === 'LEVEL_CLEAR'}
-        lives={lives}
         level={level}
         capturedPercent={capturedPercent}
         goalPercent={getLevelGoal(level)}
@@ -566,8 +493,7 @@ export default function App() {
           }}
           onResume={() => setIsPaused(false)}
           onNextLevel={() => {
-            const state = gs.current;
-            startGame(dimensions, { level: state.level + 1, lives: state.lives });
+            startGame(dimensions, { level: gs.current.level + 1 });
           }}
           onWipeProgress={() => {
             localStorage.removeItem('savedLevel');

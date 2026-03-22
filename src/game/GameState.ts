@@ -58,7 +58,6 @@ export interface GameState {
 
   // ── Level ──────────────────────────────────────────────────────────────
   capturedPercent: number;
-  lives: number;
   level: number;
 
   // ── Dissolve ───────────────────────────────────────────────────────────
@@ -109,7 +108,6 @@ export function createGameState(level = 1): GameState {
     animationTime: 0,
 
     capturedPercent: 0,
-    lives: 3,
     level,
 
     dissolveParticles: [],
