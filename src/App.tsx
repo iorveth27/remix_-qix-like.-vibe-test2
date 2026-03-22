@@ -7,7 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ASPECT_RATIO, CELL, DISSOLVE_GRAVITY, DISSOLVE_JITTER_TIME,
-  FIELD_MARGIN, FUSE_MAX_TIME, GRID_H, GRID_W, LEVEL_CLEAR_DELAY, LEVEL_PALETTES,
+  FIELD_MARGIN, FUSE_MAX_TIME, GRID_H, GRID_W, LEVEL_PALETTES,
   UI_HEIGHT_RESERVE,
 } from './constants';
 import { Direction, type Dimensions, type DissolveParticle, type QixEntity } from './types';
@@ -28,6 +28,46 @@ import { tickParticles } from './game/particles';
 type GameStage = 'PLAYING' | 'LEVEL_CLEAR' | 'DISSOLVE' | 'INTERSTITIAL' | 'GAMEOVER';
 
 const getLevelGoal = (level: number) => level >= 5 ? 75 : 65;
+
+const FILL_WAVE_DURATION = 1.8; // seconds to animate filling remaining cells
+
+const DIRS4 = [[-1,0],[1,0],[0,-1],[0,1]] as [number,number][];
+
+/** BFS fill order: EMPTY cells sorted by distance from nearest non-EMPTY cell.
+ *  Returns indices in the order they should be revealed (wave expanding inward). */
+function computeFillOrder(grid: Uint8Array): number[] {
+  const visited = new Uint8Array(GRID_W * GRID_H);
+  const order: number[] = [];
+  const q: number[] = [];
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      const i = y * GRID_W + x;
+      if (grid[i] === CELL.EMPTY) continue;
+      for (const [ddx, ddy] of DIRS4) {
+        const nx = x + ddx, ny = y + ddy;
+        if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+        const ni = ny * GRID_W + nx;
+        if (grid[ni] === CELL.EMPTY && !visited[ni]) {
+          visited[ni] = 1; q.push(ni); order.push(ni);
+        }
+      }
+    }
+  }
+  let head = 0;
+  while (head < q.length) {
+    const idx = q[head++];
+    const x = idx % GRID_W, y = (idx / GRID_W) | 0;
+    for (const [ddx, ddy] of DIRS4) {
+      const nx = x + ddx, ny = y + ddy;
+      if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+      const ni = ny * GRID_W + nx;
+      if (grid[ni] === CELL.EMPTY && !visited[ni]) {
+        visited[ni] = 1; q.push(ni); order.push(ni);
+      }
+    }
+  }
+  return order;
+}
 
 function createDissolveParticles(state: GameState, dims: Dimensions): DissolveParticle[] {
   const particles: DissolveParticle[] = [];
@@ -80,7 +120,9 @@ export default function App() {
   const bossEnabledRef      = useRef(true);
   const fuseEnabledRef      = useRef(true);
   const hasStarted = useRef(false);
-  const levelClearTimerRef = useRef(0);
+  const levelClearTimerRef  = useRef(0);
+  const fillWaveCellsRef    = useRef<number[]>([]);
+  const fillWaveIndexRef    = useRef(0);
   const savedLevelRef = useRef(parseInt(localStorage.getItem('savedLevel') ?? '1', 10));
   const enemiesFrozenRef   = useRef(false);
   const ftueStepRef        = useRef<'swipe' | 'connect' | 'done'>('done');
@@ -328,19 +370,37 @@ export default function App() {
         }
 
         if (state.capturedPercent >= getLevelGoal(state.level)) {
-          // Fill remaining empty field with sand so the board looks complete
-          for (let i = 0; i < GRID_W * GRID_H; i++) {
-            if (state.grid[i] === CELL.EMPTY) state.grid[i] = CELL.FILLED;
-          }
-          state.gridVersion++;
+          // Remove enemies so they don't render during the fill animation
+          state.qixEntities        = [];
+          state.sparks             = [];
+          state.captureFlash       = 0;  // suppress capture-flash glow during fill
+          state.captureWaveProgress = 1; // suppress post-capture shimmer during fill
+          // Compute BFS fill order: wave expanding from captured territory inward
+          fillWaveCellsRef.current  = computeFillOrder(state.grid);
+          fillWaveIndexRef.current  = 0;
           levelClearTimerRef.current = 0;
           setStage('LEVEL_CLEAR');
         }
       } else if (stage === 'LEVEL_CLEAR') {
-        gs.current.animationTime += dt * 1000;
+        const state = gs.current;
+        state.animationTime += dt * 1000;
         levelClearTimerRef.current += dt;
-        if (levelClearTimerRef.current >= LEVEL_CLEAR_DELAY) {
-          const state = gs.current;
+
+        // Progressively fill remaining EMPTY cells in BFS wave order.
+        // Ease-out: fills fast at first, slows as it converges.
+        const cells = fillWaveCellsRef.current;
+        const t = Math.min(levelClearTimerRef.current / FILL_WAVE_DURATION, 1);
+        const fillRatio = 1 - (1 - t) * (1 - t); // ease-out quadratic
+        const targetIdx = Math.floor(fillRatio * cells.length);
+        let changed = false;
+        while (fillWaveIndexRef.current < targetIdx) {
+          const ci = cells[fillWaveIndexRef.current++];
+          if (state.grid[ci] === CELL.EMPTY) { state.grid[ci] = CELL.FILLED; changed = true; }
+        }
+        if (changed) state.gridVersion++;
+
+        // Transition to DISSOLVE as soon as all cells are filled
+        if (fillWaveIndexRef.current >= cells.length) {
           state.dissolveParticles = createDissolveParticles(state, dimensions);
           state.dissolveTimer = 0;
           setStage('DISSOLVE');
@@ -396,7 +456,7 @@ export default function App() {
         bucketPitch:         state.bucketPitch,
         captureWaveProgress: state.captureWaveProgress,
         showFullArt:         stage === 'DISSOLVE' || stage === 'INTERSTITIAL',
-        levelClearProgress:  stage === 'LEVEL_CLEAR' ? Math.min(levelClearTimerRef.current / LEVEL_CLEAR_DELAY, 1) : 0,
+        levelClearProgress:  0,
       });
 
       requestRef.current = requestAnimationFrame(update);
