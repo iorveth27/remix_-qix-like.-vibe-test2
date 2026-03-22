@@ -10,10 +10,6 @@ interface OverlaysProps {
   capturedPercent: number;
   level: number;
   deathReason: 'QIX' | 'Sparks';
-  sparksEnabled: boolean;
-  bossEnabled: boolean;
-  onToggleSparks: () => void;
-  onToggleBoss: () => void;
   onRestart: () => void;
   onResume: () => void;
   onNextLevel: () => void;
@@ -22,8 +18,7 @@ interface OverlaysProps {
 
 export function Overlays({
   gameStage, isPaused, capturedPercent, level, deathReason,
-  sparksEnabled, bossEnabled,
-  onToggleSparks, onToggleBoss, onRestart, onResume, onNextLevel, onWipeProgress,
+  onRestart, onResume, onNextLevel, onWipeProgress,
 }: OverlaysProps) {
   return (
     <AnimatePresence>
@@ -87,27 +82,9 @@ export function Overlays({
             className="bg-black/80 backdrop-blur-2xl p-10 rounded-[48px] border-2 border-white/10 shadow-[0_0_40px_rgba(0,0,0,0.8)] flex flex-col items-center gap-8 max-w-[320px] w-full text-white"
           >
             <div className="text-center">
-              <h2 className="text-4xl font-sans font-bold mb-2">Paused</h2>
-              <p className="text-white/50 text-sm font-medium tracking-wide uppercase">Sandbox settings</p>
+              <h2 className="text-4xl font-sans font-bold">Paused</h2>
             </div>
             <div className="flex flex-col gap-3 w-full">
-              {/* Toggles */}
-              {[
-                { label: 'Sparks', enabled: sparksEnabled, onToggle: onToggleSparks },
-                { label: 'Boss', enabled: bossEnabled, onToggle: onToggleBoss },
-              ].map(({ label, enabled, onToggle }) => (
-                <button
-                  key={label}
-                  onClick={onToggle}
-                  className="w-full flex items-center justify-between px-6 py-4 rounded-full bg-white/5 border border-white/10 text-white font-bold transition-all hover:bg-white/10 active:scale-95"
-                >
-                  <span className="text-sm tracking-wide">{label}</span>
-                  <div className={`w-12 h-7 rounded-full transition-colors relative shadow-inner ${enabled ? 'bg-amber-500' : 'bg-white/20'}`}>
-                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-black shadow transition-transform ${enabled ? 'translate-x-[22px]' : 'translate-x-1'}`} />
-                  </div>
-                </button>
-              ))}
-
               <button
                 onClick={onResume}
                 className="w-full py-4 bg-amber-500 text-black rounded-full font-bold transition-all hover:bg-amber-400 active:scale-95 flex items-center justify-center gap-2 mt-2"

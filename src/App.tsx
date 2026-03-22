@@ -122,7 +122,7 @@ export default function App() {
   const levelClearTimerRef  = useRef(0);
   const fillWaveCellsRef    = useRef<number[]>([]);
   const fillWaveIndexRef    = useRef(0);
-  const savedLevelRef = useRef(parseInt(localStorage.getItem('savedLevel') ?? '1', 10));
+  const savedLevelRef = useRef(parseInt(localStorage.getItem('savedLevel') ?? '1', 10) || 1);
   const enemiesFrozenRef   = useRef(false);
   const ftueStepRef        = useRef<'swipe' | 'connect' | 'done'>('done');
   const ftueHintTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -240,10 +240,10 @@ export default function App() {
     setStage('PLAYING');
   };
 
-  // Auto-start once dimensions are ready
+  // Auto-start once dimensions are ready — resume from last saved level
   useEffect(() => {
     if (dimensions.fieldWidth > 0 && !hasStarted.current) {
-      startGame(dimensions);
+      startGame(dimensions, { level: savedLevelRef.current });
       hasStarted.current = true;
     }
   }, [dimensions]);
@@ -345,6 +345,12 @@ export default function App() {
             playCaptureSound();
             setCapturedPercent(state.capturedPercent);
             ftueOnFirstCaptureRef.current();
+            state.floatingTexts.push({
+              pos: { x: state.spiderPos.x, y: state.spiderPos.y - 20 },
+              text: `-${captured}%`,
+              life: 1.5,
+              maxLife: 1.5,
+            });
           }
         });
 
@@ -533,10 +539,6 @@ export default function App() {
           capturedPercent={capturedPercent}
           level={level}
           deathReason={deathReason}
-          sparksEnabled={sparksEnabled}
-          bossEnabled={bossEnabled}
-          onToggleSparks={() => setSparksEnabled(v => !v)}
-          onToggleBoss={() => setBossEnabled(v => !v)}
           onRestart={() => {
             setIsPaused(false);
             startGame(dimensions, { level: savedLevelRef.current });

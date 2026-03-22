@@ -650,13 +650,9 @@ export function renderFrame(
     ctx.font = 'bold 22px Inter, sans-serif';
     ctx.textAlign = 'center';
     // Thick black stroke for legibility over any background colour
-    ctx.lineWidth = 5;
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-    ctx.strokeText(ft.text, tx, ty);
-    // Bright white fill
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fde68a';
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = 'rgba(245,166,35,0.8)';
     ctx.fillText(ft.text, tx, ty);
     ctx.restore();
   });
