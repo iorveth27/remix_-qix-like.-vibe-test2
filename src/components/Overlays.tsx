@@ -9,7 +9,7 @@ interface OverlaysProps {
   isPaused: boolean;
   capturedPercent: number;
   level: number;
-  deathReason: 'QIX' | 'Sparks';
+  deathReason: 'QIX' | 'Crabs';
   onRestart: () => void;
   onResume: () => void;
   onNextLevel: () => void;

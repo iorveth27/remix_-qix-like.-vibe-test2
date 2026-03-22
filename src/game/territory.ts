@@ -89,9 +89,10 @@ export function fillCapturedArea(state: GameState, dims: Dimensions): number {
   // where captures are small enough that largest reliably equals the open field.
   let outsideCid: number;
 
-  if (state.qixEntities.length > 0) {
+  const aliveQix = state.qixEntities.filter(e => !e.dead);
+  if (aliveQix.length > 0) {
     let foundCid = -1;
-    for (const entity of state.qixEntities) {
+    for (const entity of aliveQix) {
       const gp = getGridPos(entity.pos, dims);
       const cid = compId[gp.y * GRID_W + gp.x];
       if (cid >= 0) { foundCid = cid; break; }
@@ -104,6 +105,12 @@ export function fillCapturedArea(state: GameState, dims: Dimensions): number {
       }
     }
     outsideCid = foundCid;
+  } else if (aliveQix.length === 0 && state.qixEntities.length > 0) {
+    // All QIX dead — fall back to largest component
+    outsideCid = 0;
+    for (let i = 1; i < components.length; i++) {
+      if (components[i].length > components[outsideCid].length) outsideCid = i;
+    }
   } else {
     // No QIX — largest component is the open field.
     outsideCid = 0;
@@ -155,29 +162,26 @@ export function fillCapturedArea(state: GameState, dims: Dimensions): number {
     }
   }
 
-  // ── 8. Handle QIX entities trapped in non-EMPTY territory ────────────────
-  for (const entity of state.qixEntities) {
+  // ── 8. Kill QIX entities enclosed in captured territory ──────────────────
+  for (const entity of state.qixEntities.filter(e => !e.dead)) {
     const qixGP = getGridPos(entity.pos, dims);
     if (!isEmptyCell(grid, qixGP.x, qixGP.y)) {
-      const qbfs = new Uint8Array(GRID_W * GRID_H);
-      const qqueue: [number, number][] = [[qixGP.x, qixGP.y]];
-      qbfs[qixGP.y * GRID_W + qixGP.x] = 1;
-      let rescued = false;
-      while (qqueue.length > 0 && !rescued) {
-        const [qx, qy] = qqueue.shift()!;
-        for (const [ddx, ddy] of DIRS4) {
-          const nx = qx + ddx, ny = qy + ddy;
-          if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
-          if (qbfs[ny * GRID_W + nx]) continue;
-          qbfs[ny * GRID_W + nx] = 1;
-          if (isEmptyCell(grid, nx, ny)) {
-            entity.pos     = gridToWorld(nx, ny, dims);
-            entity.lastPos = { ...entity.pos };
-            rescued = true;
-            break;
-          }
-          qqueue.push([nx, ny]);
-        }
+      entity.dead = true;
+      entity.respawnTimer = 5;
+      entity.trail = [];
+      // Burst particles
+      for (let ei = 0; ei < 60; ei++) {
+        const a = Math.random() * Math.PI * 2;
+        const spd = 40 + Math.random() * 120;
+        const r = Math.random();
+        state.particles.push({
+          pos: { ...entity.pos },
+          vel: { x: Math.cos(a) * spd, y: Math.sin(a) * spd },
+          color: r > 0.5 ? '#ff6644' : r > 0.25 ? '#ffaa22' : '#ffffff',
+          life: 0.4 + Math.random() * 0.5,
+          maxLife: 1,
+          size: 2 + Math.random() * 3,
+        });
       }
     }
   }

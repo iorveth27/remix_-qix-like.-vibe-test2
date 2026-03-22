@@ -29,6 +29,8 @@ function pointToSegDistSq(
   return (px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2;
 }
 
+const QIX_RESPAWN_TIME = 5; // seconds
+
 export function tickQixEntity(
   entity: QixEntity,
   state: GameState,
@@ -36,6 +38,22 @@ export function tickQixEntity(
   dims: Dimensions,
   onDeath: () => void,
 ): void {
+  // ── Respawn countdown ────────────────────────────────────────────────────
+  if (entity.dead) {
+    entity.respawnTimer -= dt;
+    if (entity.respawnTimer <= 0) {
+      entity.dead = false;
+      entity.respawnTimer = 0;
+      entity.pos = { x: dims.fieldWidth / 2, y: dims.fieldHeight / 2 };
+      entity.lastPos = { ...entity.pos };
+      entity.trail = [];
+      const a = Math.random() * Math.PI * 2;
+      entity.angle = a;
+      entity.vel = { x: Math.cos(a), y: Math.sin(a) };
+    }
+    return;
+  }
+
   // Honour post-death invincibility frames (same guard as sparks)
   if (state.damageFlash > 0) return;
 

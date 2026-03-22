@@ -56,6 +56,8 @@ export interface QixEntity {
   lastPos: Point;
   angle: number;
   trail: Point[];
+  dead: boolean;
+  respawnTimer: number;
 }
 
 export interface DissolveParticle {

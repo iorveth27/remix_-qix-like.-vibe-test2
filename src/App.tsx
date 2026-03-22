@@ -106,7 +106,7 @@ export default function App() {
   const [dimensions,      setDimensions]      = useState<Dimensions>({ width: 0, height: 0, fieldWidth: 0, fieldHeight: 0, offsetX: 0, offsetY: 0 });
   const [capturedPercent, setCapturedPercent] = useState(0);
   const [level,           setLevel]           = useState(1);
-  const [deathReason,     setDeathReason]     = useState<'QIX' | 'Sparks'>('QIX');
+  const [deathReason,     setDeathReason]     = useState<'QIX' | 'Crabs'>('QIX');
   const [loopKey,         setLoopKey]         = useState(0);
   const [ftueHint,        setFtueHint]        = useState<string | null>(null);
 
@@ -179,6 +179,8 @@ export default function App() {
       lastPos: { x: x - Math.cos(angle) * speed * dt0, y: y - Math.sin(angle) * speed * dt0 },
       angle,
       trail: [],
+      dead: false,
+      respawnTimer: 0,
     };
   };
 
@@ -288,7 +290,7 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const handleDeath = (reason: 'QIX' | 'Sparks') => {
+    const handleDeath = (reason: 'QIX' | 'Crabs') => {
       setDeathReason(reason);
       const state = gs.current;
       state.damageFlash = 0.5;
@@ -357,7 +359,7 @@ export default function App() {
           }
         }
         if (sparksEnabledRef.current && !enemiesFrozenRef.current) {
-          tickSparks(state, dt, dimensions, () => handleDeath('Sparks'));
+          tickSparks(state, dt, dimensions, () => handleDeath('Crabs'));
         }
 
         if (state.capturedPercent >= getLevelGoal(state.level)) {
@@ -432,7 +434,7 @@ export default function App() {
         floatingTexts:       state.floatingTexts,
         captureFlash:        state.captureFlash,
         damageFlash:         state.damageFlash,
-        qixEntities:         state.qixEntities.map(q => ({ pos: q.pos, trail: q.trail })),
+        qixEntities:         state.qixEntities.filter(q => !q.dead).map(q => ({ pos: q.pos, trail: q.trail })),
         dissolveParticles:   state.dissolveParticles,
         isDissolving:        gameStageRef.current === 'DISSOLVE',
         dissolveTimer:       state.dissolveTimer,
