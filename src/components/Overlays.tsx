@@ -15,11 +15,12 @@ interface OverlaysProps {
   onResume: () => void;
   onNextLevel: () => void;
   onWipeProgress: () => void;
+  onDebugWin: () => void;
 }
 
 export function Overlays({
   gameStage, isPaused, capturedPercent, level, deathReason,
-  onRestart, onResume, onNextLevel, onWipeProgress,
+  onRestart, onResume, onNextLevel, onWipeProgress, onDebugWin,
 }: OverlaysProps) {
   const [shownLevel, setShownLevel] = useState(level + 1);
 
@@ -109,6 +110,12 @@ export function Overlays({
               >
                 <RotateCcw className="w-5 h-5" />
                 Restart
+              </button>
+              <button
+                onClick={onDebugWin}
+                className="w-full py-3 bg-transparent text-amber-400/50 border border-amber-500/20 rounded-full font-bold text-sm transition-all hover:bg-amber-500/10 hover:text-amber-400 active:scale-95 flex items-center justify-center gap-2"
+              >
+                🏆 Win Level
               </button>
               <button
                 onClick={onWipeProgress}

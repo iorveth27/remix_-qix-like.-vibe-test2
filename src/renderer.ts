@@ -21,7 +21,7 @@ export interface RenderState {
   isDissolving: boolean;
   dissolveTimer: number;
   level: number;
-  sparks: { pos: Point; migrating: boolean }[];
+  sparks: { pos: Point; migrating: boolean; color: 'red' | 'blue' }[];
   sparksEnabled: boolean;
   bossEnabled: boolean;
   animationTime: number;
@@ -670,13 +670,14 @@ export function renderFrame(
     ctx.globalAlpha = alpha;
     ctx.translate(sx, sy + scuttle);
 
-    const bodyColor   = spark.migrating ? '#9999cc' : '#e05030';
-    const shellColor  = spark.migrating ? '#7777aa' : '#c03820';
-    const clawColor   = spark.migrating ? '#8888bb' : '#d04428';
+    const isBlue = spark.color === 'blue';
+    const bodyColor  = spark.migrating ? '#9999cc' : isBlue ? '#3060d0' : '#e05030';
+    const shellColor = spark.migrating ? '#7777aa' : isBlue ? '#1a40a0' : '#c03820';
+    const clawColor  = spark.migrating ? '#8888bb' : isBlue ? '#2550c0' : '#d04428';
 
     // Shadow glow
     ctx.shadowBlur  = spark.migrating ? 6 : 14;
-    ctx.shadowColor = spark.migrating ? 'rgba(150,150,255,0.5)' : 'rgba(220,60,20,0.6)';
+    ctx.shadowColor = spark.migrating ? 'rgba(150,150,255,0.5)' : isBlue ? 'rgba(30,80,220,0.6)' : 'rgba(220,60,20,0.6)';
 
     // --- Legs (3 each side, animated) ---
     ctx.strokeStyle = bodyColor;

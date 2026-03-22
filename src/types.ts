@@ -43,6 +43,7 @@ export interface SparkState {
   gy: number;       // current grid cell y
   dir: Point;       // cardinal unit direction vector
   type: 'chaser' | 'random';
+  color: 'red' | 'blue';
   /** True while traversing captured territory to reach the active border */
   migrating: boolean;
   /** Ghost target grid cell (only valid when migrating) */

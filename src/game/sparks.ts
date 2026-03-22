@@ -34,7 +34,7 @@ export function tickSparks(
   const playerGP = getGridPos(state.spiderPos, dims);
 
   for (let si = 0; si < state.sparks.length; si++) {
-    let { pos, gx, gy, dir, type, migrating, targetGX, targetGY } = state.sparks[si];
+    let { pos, gx, gy, dir, type, color, migrating, targetGX, targetGY } = state.sparks[si];
     let remaining = sparkSpeed * dt;
 
     // ── Ghost mode: move straight toward targetGX/targetGY ─────────────────
@@ -52,7 +52,7 @@ export function tickSparks(
         gy         = targetGY;
         migrating  = false;
       }
-      state.sparks[si] = { pos, gx, gy, dir, type, migrating, targetGX, targetGY };
+      state.sparks[si] = { pos, gx, gy, dir, type, color, migrating, targetGX, targetGY };
       continue;
     }
 
@@ -133,7 +133,7 @@ export function tickSparks(
       }
     }
 
-    state.sparks[si] = { pos, gx, gy, dir, type, migrating, targetGX, targetGY };
+    state.sparks[si] = { pos, gx, gy, dir, type, color, migrating, targetGX, targetGY };
   }
 
   // Spark–spark collision: reverse directions

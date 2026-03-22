@@ -215,21 +215,48 @@ export default function App() {
       state.qixEntities = [makeQix(dims.fieldWidth / 2, dims.fieldHeight / 2)];
       const sgx = Math.round(0.5 * (GRID_W - 1)), sgy = GRID_H - 1;
       state.sparks = [
-        { pos: gridToWorld(sgx, sgy, dims), gx: sgx, gy: sgy, dir: { x: -1, y: 0 }, type: 'chaser', migrating: false, targetGX: sgx, targetGY: sgy },
+        { pos: gridToWorld(sgx, sgy, dims), gx: sgx, gy: sgy, dir: { x: -1, y: 0 }, type: 'chaser', color: 'red', migrating: false, targetGX: sgx, targetGY: sgy },
       ];
       enemiesFrozenRef.current = true;
       ftueStepRef.current = 'done';
       showFTUEHint('Avoid enemies');
     } else {
-      // Normal levels (3+): lvl 3 = 1 QIX, lvl 4+ = 2 QIX
-      state.qixEntities = [makeQix(dims.fieldWidth / 2, dims.fieldHeight / 2)];
-      if (lvl >= 4) state.qixEntities.push(makeQix(dims.fieldWidth * 2 / 3, dims.fieldHeight / 3));
-      const s1gx = Math.round(0.25 * (GRID_W - 1)), s1gy = GRID_H - 1;
-      const s2gx = Math.round(0.75 * (GRID_W - 1)), s2gy = GRID_H - 1;
-      state.sparks = [
-        { pos: gridToWorld(s1gx, s1gy, dims), gx: s1gx, gy: s1gy, dir: { x: -1, y: 0 }, type: 'chaser',  migrating: false, targetGX: s1gx, targetGY: s1gy },
-        { pos: gridToWorld(s2gx, s2gy, dims), gx: s2gx, gy: s2gy, dir: { x:  1, y: 0 }, type: 'random', migrating: false, targetGX: s2gx, targetGY: s2gy },
-      ];
+      // Normal levels (3+)
+      if (lvl === 4) {
+        // 1 QIX, 4 crabs (2 red + 2 blue)
+        state.qixEntities = [makeQix(dims.fieldWidth / 2, dims.fieldHeight / 2)];
+        const gxA = Math.round(0.20 * (GRID_W - 1)), gxB = Math.round(0.40 * (GRID_W - 1));
+        const gxC = Math.round(0.60 * (GRID_W - 1)), gxD = Math.round(0.80 * (GRID_W - 1));
+        const gy  = GRID_H - 1;
+        state.sparks = [
+          { pos: gridToWorld(gxA, gy, dims), gx: gxA, gy, dir: { x: -1, y: 0 }, type: 'chaser',  color: 'red',  migrating: false, targetGX: gxA, targetGY: gy },
+          { pos: gridToWorld(gxB, gy, dims), gx: gxB, gy, dir: { x:  1, y: 0 }, type: 'random',  color: 'red',  migrating: false, targetGX: gxB, targetGY: gy },
+          { pos: gridToWorld(gxC, gy, dims), gx: gxC, gy, dir: { x: -1, y: 0 }, type: 'random',  color: 'blue', migrating: false, targetGX: gxC, targetGY: gy },
+          { pos: gridToWorld(gxD, gy, dims), gx: gxD, gy, dir: { x:  1, y: 0 }, type: 'chaser',  color: 'blue', migrating: false, targetGX: gxD, targetGY: gy },
+        ];
+      } else if (lvl === 5) {
+        // 2 QIX, 2 crabs
+        state.qixEntities = [
+          makeQix(dims.fieldWidth / 3,     dims.fieldHeight / 2),
+          makeQix(dims.fieldWidth * 2 / 3, dims.fieldHeight / 2),
+        ];
+        const s1gx = Math.round(0.25 * (GRID_W - 1)), s1gy = GRID_H - 1;
+        const s2gx = Math.round(0.75 * (GRID_W - 1)), s2gy = GRID_H - 1;
+        state.sparks = [
+          { pos: gridToWorld(s1gx, s1gy, dims), gx: s1gx, gy: s1gy, dir: { x: -1, y: 0 }, type: 'chaser', color: 'red',  migrating: false, targetGX: s1gx, targetGY: s1gy },
+          { pos: gridToWorld(s2gx, s2gy, dims), gx: s2gx, gy: s2gy, dir: { x:  1, y: 0 }, type: 'random', color: 'blue', migrating: false, targetGX: s2gx, targetGY: s2gy },
+        ];
+      } else {
+        // lvl 3 and 6+: 1 QIX (2 from lvl 6+), 2 red crabs
+        state.qixEntities = [makeQix(dims.fieldWidth / 2, dims.fieldHeight / 2)];
+        if (lvl >= 6) state.qixEntities.push(makeQix(dims.fieldWidth * 2 / 3, dims.fieldHeight / 3));
+        const s1gx = Math.round(0.25 * (GRID_W - 1)), s1gy = GRID_H - 1;
+        const s2gx = Math.round(0.75 * (GRID_W - 1)), s2gy = GRID_H - 1;
+        state.sparks = [
+          { pos: gridToWorld(s1gx, s1gy, dims), gx: s1gx, gy: s1gy, dir: { x: -1, y: 0 }, type: 'chaser', color: 'red', migrating: false, targetGX: s1gx, targetGY: s1gy },
+          { pos: gridToWorld(s2gx, s2gy, dims), gx: s2gx, gy: s2gy, dir: { x:  1, y: 0 }, type: 'random', color: 'red', migrating: false, targetGX: s2gx, targetGY: s2gy },
+        ];
+      }
       enemiesFrozenRef.current = false;
       ftueStepRef.current = 'done';
       if (lvl === 3 && !ftueLevel3ShownRef.current) {
@@ -448,7 +475,7 @@ export default function App() {
         isDissolving:        gameStageRef.current === 'DISSOLVE',
         dissolveTimer:       state.dissolveTimer,
         level:               state.level,
-        sparks:              state.sparks.map(s => ({ pos: s.pos, migrating: s.migrating })),
+        sparks:              state.sparks.map(s => ({ pos: s.pos, migrating: s.migrating, color: s.color })),
         sparksEnabled:       sparksEnabledRef.current,
         bossEnabled:         bossEnabledRef.current,
         animationTime:       state.animationTime,
@@ -555,6 +582,23 @@ export default function App() {
           onResume={() => setIsPaused(false)}
           onNextLevel={() => {
             startGame(dimensions, { level: gs.current.level + 1 });
+          }}
+          onDebugWin={() => {
+            setIsPaused(false);
+            const state = gs.current;
+            for (let i = 0; i < state.grid.length; i++) {
+              if (state.grid[i] === CELL.EMPTY) state.grid[i] = CELL.FILLED;
+            }
+            state.gridVersion++;
+            state.capturedPercent = 100;
+            state.qixEntities = [];
+            state.sparks = [];
+            state.captureWaveProgress = 1;
+            fillWaveCellsRef.current = [];
+            fillWaveIndexRef.current = 0;
+            levelClearTimerRef.current = 0;
+            setCapturedPercent(100);
+            setStage('LEVEL_CLEAR');
           }}
           onWipeProgress={() => {
             localStorage.removeItem('savedLevel');
