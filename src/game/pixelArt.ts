@@ -106,18 +106,27 @@ function level2Art(): number[] {
   });
 }
 
-// Level 3 — Heart
+// Level 3 — Pixel-art heart (13×11, centered in 20×20)
+// Colors: 0=bg, 1=black outline, 2=red fill, 3=dark red shadow, 4=bright red highlight
 function level3Art(): number[] {
-  const cx = 9.5, cy = 8.5;
+  const H = [
+    [0,0,1,1,0,0,0,0,0,1,1,0,0],  // row 0 — two bump tops
+    [0,1,2,2,1,0,1,0,1,2,2,1,0],  // row 1 — bump interiors + dip outline
+    [1,2,4,2,2,1,2,1,2,2,2,2,1],  // row 2 — bumps separate, dip interior
+    [1,4,2,2,2,2,1,2,2,2,2,2,1],  // row 3 — merge outline at dip
+    [1,4,2,2,2,2,2,2,2,2,2,2,1],  // row 4 — fully merged, highlight top-left
+    [1,2,2,2,2,2,2,2,2,2,2,2,1],  // row 5 — widest row
+    [0,1,3,2,2,2,2,2,2,2,3,1,0],  // row 6 — taper begins, shadow creeps in
+    [0,0,1,3,2,2,2,2,2,3,1,0,0],  // row 7
+    [0,0,0,1,3,2,2,2,3,1,0,0,0],  // row 8
+    [0,0,0,0,1,3,2,3,1,0,0,0,0],  // row 9
+    [0,0,0,0,0,1,1,0,0,0,0,0,0],  // row 10 — 2-pixel tip
+  ];
+  const ox = 3, oy = 4; // center 13×11 in 20×20
   return make((x, y) => {
-    const nx = (x - cx) / 8;
-    const ny = -(y - cy) / 8;
-    const hv = (nx*nx + ny*ny - 1)**3 - nx*nx * ny*ny*ny;
-    const nxI = nx / 0.75, nyI = ny / 0.75;
-    const hvI = (nxI*nxI + nyI*nyI - 1)**3 - nxI*nxI * nyI*nyI*nyI;
-    if (hvI <= 0) return 2;
-    if (hv  <= 0) return 3;
-    return 0;
+    const hx = x - ox, hy = y - oy;
+    if (hx < 0 || hx >= 13 || hy < 0 || hy >= 11) return 0;
+    return H[hy][hx];
   });
 }
 
@@ -266,7 +275,7 @@ export function getLevelArt(level: number): number[] {
 const LEVEL_ART_COLORS: [string, string, string, string, string][] = [
   ['#080808', '#e89018', '#f8d858', '#b84a00', '#b81008'], // 1: burny logo
   ['#0d0a08', '#8B5A2B', '#f0e0c8', '#2a1200', '#f4a0b8'], // 2: cat
-  ['#b88090', '#d43a7c', '#f870b8', '#8c1a50', '#ffc0e0'], // 3: heart
+  ['#080808', '#111111', '#cc2020', '#881010', '#ff4422'], // 3: heart
   ['#809870', '#3a8c3a', '#70f070', '#1a5a1a', '#b0f0b0'], // 4: clover
   ['#8878a8', '#7c3ac4', '#b070f8', '#4a1a8c', '#d8c0f8'], // 5: gem
   ['#78a0a0', '#3ab8a8', '#70f8e8', '#18807a', '#b0f0e8'], // 6: spiral

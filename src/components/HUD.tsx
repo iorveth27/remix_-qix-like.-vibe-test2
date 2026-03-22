@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings } from 'lucide-react';
 
-const DIGIT_STRIP = '0123456789';
+const DIGIT_STRIP = '9876543210';
 
 function AnimatedDigit({ digit, fontSize }: { digit: string; fontSize: number }) {
   const h = fontSize * 1.25;
@@ -10,6 +10,7 @@ function AnimatedDigit({ digit, fontSize }: { digit: string; fontSize: number })
   return (
     <span style={{ display: 'inline-block', overflow: 'hidden', height: h, verticalAlign: 'middle' }}>
       <motion.span
+        initial={{ y: -idx * h }}
         animate={{ y: -idx * h }}
         transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         style={{ display: 'flex', flexDirection: 'column' }}
@@ -22,7 +23,7 @@ function AnimatedDigit({ digit, fontSize }: { digit: string; fontSize: number })
   );
 }
 
-function AnimatedCounter({ value, fontSize }: { value: number; fontSize: number }) {
+export function AnimatedCounter({ value, fontSize }: { value: number; fontSize: number }) {
   const digits = String(value).split('');
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -74,9 +75,13 @@ export function HUD({ isVisible, level, capturedPercent, goalPercent, onPause }:
                   color: '#fde68a',
                   textShadow: '0 0 8px rgba(245,166,35,0.8), 0 2px 4px rgba(0,0,0,0.9)',
                   letterSpacing: '0.04em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
                 }}
               >
-                Lvl {level}
+                <span style={{ opacity: 0.6 }}>Lvl</span>
+                <AnimatedCounter value={level} fontSize={16} />
               </span>
             </div>
 

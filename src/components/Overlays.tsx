@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, RotateCcw, ArrowRight } from 'lucide-react';
+import { AnimatedCounter } from './HUD';
 
 type GameStage = 'PLAYING' | 'LEVEL_CLEAR' | 'DISSOLVE' | 'INTERSTITIAL' | 'GAMEOVER';
 
@@ -20,6 +21,16 @@ export function Overlays({
   gameStage, isPaused, capturedPercent, level, deathReason,
   onRestart, onResume, onNextLevel, onWipeProgress,
 }: OverlaysProps) {
+  const [shownLevel, setShownLevel] = useState(level + 1);
+
+  useEffect(() => {
+    if (gameStage === 'INTERSTITIAL') {
+      setShownLevel(level);
+      const id = setTimeout(() => setShownLevel(level + 1), 120);
+      return () => clearTimeout(id);
+    }
+  }, [gameStage]);
+
   return (
     <AnimatePresence>
       {gameStage === 'GAMEOVER' && (
@@ -55,8 +66,8 @@ export function Overlays({
           animate={{ opacity: 1, scale: 1 }}
           className="z-10 bg-black/80 backdrop-blur-2xl p-10 rounded-[48px] border-2 border-amber-500/30 flex flex-col items-center gap-6 shadow-[0_0_40px_rgba(251,191,36,0.2)] text-white"
         >
-          <h2 className="text-5xl font-sans font-black tracking-tight text-amber-400">
-            Level {level + 1}
+          <h2 className="text-5xl font-sans font-black tracking-tight text-amber-400 flex items-center gap-2">
+            Level <AnimatedCounter value={shownLevel} fontSize={48} />
           </h2>
           <button
             onClick={onNextLevel}

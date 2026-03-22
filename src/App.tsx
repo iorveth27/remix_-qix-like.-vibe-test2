@@ -234,9 +234,11 @@ export default function App() {
     }
 
     gs.current = state;
-    setLevel(lvl);
     setCapturedPercent(0);
     setStage('PLAYING');
+    // Delay level number update so the HUD slides in at the old number first,
+    // then the digit animation fires once the HUD is visible.
+    setTimeout(() => setLevel(lvl), 120);
   };
 
   // Auto-start once dimensions are ready — resume from last saved level
