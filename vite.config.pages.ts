@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/remix_-qix-like.-vibe-test2/',
+  base: '/Sandqix/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
