@@ -1,6 +1,7 @@
 import { CELL, GRID_W, GRID_H, DISSOLVE_JITTER_TIME, LEVEL_PALETTES } from './constants';
 import type { Dimensions, DissolveParticle, Particle, FloatingText, Point } from './types';
 import { ART_W, ART_H, getLevelArt, getLevelArtColors } from './game/pixelArt';
+import burnyLogoUrl from './assets/burnygames_logo.png';
 
 export interface RenderState {
   grid: Uint8Array;
@@ -109,7 +110,7 @@ const bucketImg = new Image();
 bucketImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(BUCKET_SVG);
 
 const burnyLogoImg = new Image();
-burnyLogoImg.src = '/burnygames_logo.png';
+burnyLogoImg.src = burnyLogoUrl;
 
 function hashFloat(a: number, b: number): number {
   let h = (a * 374761393 + b * 1103515245) | 0;
