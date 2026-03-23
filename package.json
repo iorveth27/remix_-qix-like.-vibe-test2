@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:singlefile": "vite build --config vite.config.singlefile.ts",
     "build:pages": "vite build --config vite.config.pages.ts",
-    "deploy": "npm run build:pages && gh-pages -d dist",
+    "deploy": "npm run build:pages && gh-pages -d dist --dotfiles",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
