@@ -283,6 +283,91 @@ Approximate times are inferred from git commit timestamps.
 
 ---
 
+## March 23, 2026 — Major Gameplay & Aesthetic Overhaul
+
+**1.** change amount of bugs captured to % of territory captured. Win condition 90% of captured territory
+
+**2.** bug: when a player is on a border or on it's territory, the enemy can kill the spider. Expected result, the enemy can kill the player only if a player draws a line
+
+**3.** Change the loose condition: provide player with 3 hearts. HUD: place hearts on the top screen. When the player gets killed, remove the filling from the heart, leave only the outline. If amount of hearts = 0, trigger loose screen.
+3.1 Change Loose screen text to: Header: So close. Main text: Percentage. Button: Retry
+
+**4.** let's change the movement to a joystick. joystick axis determine and change the movement direction.
+
+**5.** The joystick is too large and it overshadows the playing field. Make it smaller and more transparent
+
+**6.** Movement: The start of the movement is faster than the rest of the movement. Make it equal in terms of speed
+
+**7.** HUD: The UI elements are on the playing field. Separate the field and HUD
+
+**8.** HUD: place hearts in the top left corner. Remove / n%. Change word territory to captured: n%
+
+**9.** Joystick: make joystick follow the finger
+
+**10.** Movement: make movement faster
+
+**11.** Bug: the joystick spawns in somewhat approximate position. Not in the direct touch position.
+
+**12.** Joystick: make joystick move in the direction of the finger
+
+**13.** remove all of the enemies beside the Owl
+
+**14.** Let's redo the owl logic
+
+Primary Movement (Bounce Physics): The boss moves like a billiard ball — travels diagonally until it hits the edge or a completed line, then bounces at 90°.
+
+"Fire Breath" Attack: At fixed intervals (3–5s), the boss pauses and fires a fireball directly toward the cursor.
+
+Enrage Phase: Once >60–70% is revealed, boss turns bright red, speed +20–30%, fires more frequently.
+
+**15.** Game Mechanics: Life Gauge and Damage
+
+Timer as a Life Gauge: At start of each level, gauge fills to 100%. Passive depletion: 1–2%/s. Stall Penalty: extends line but stops moving causes faster drain.
+
+Taking Damage: Tail Hit = lose fixed % (25–50%), cursor knocked back to safety. Direct Collision = higher damage.
+
+Recovery through Capture: Small cuts restore 5–10%. Large cuts (>20%) restore gauge to max. "Life+" bonus items appear on field.
+
+"Showtime" Mechanic: Keeping gauge >90% for extended period activates Showtime — player speed up, boss slowed/frozen.
+
+Critical Health State: Below 15–20%, music changes, screen flashes. Depletion briefly slows for a last-chance cut.
+
+**16.** Bug: although the vitality bar is full, after 3rd death I trigger loose condition. Expected result: the loose screen is triggered only when vitality = 0
+
+**17.** let's remove heart items for now
+
+**18.** let's add visual feedback to spider's death
+
+**19.** balance: restoring vitality is too easy. Some small field captures recover almost 100% of vitality. It should be on the harder side
+
+**20.** let's remove showtime state
+
+**21.** Difficulty & Balance:
+
+The "70–80%" Difficulty Curve: Up to 50% boss is calm. After 70% boss enters frenzied state — speed increases, bounces more frequently due to narrowed space.
+
+Life Gauge Mathematics: Error Penalty removes ~30% gauge. Capturing 10% restores only ~15%. Cannot tank hits — must outpace enemy attack frequency with long high-risk lines.
+
+**22.** let's add a setting button in the upper right corner that will pause the game
+
+**23.** let's change the speed of all game objects, to make the game feel faster
+
+**24.** let's change the win condition: captured: =80%. This win condition should be specified in the HUD through n%/winCondition%
+
+**25.** Align the prototype with the aesthetics of Royal Match, Zen Match, and Block Blast. Establish a Strong Theme (Zen Garden / Home / Floral). Color Palette: vibrant, curated. Visual "Juice": particles, glowing line trail, squash-and-stretch enemies. UI/UX: round corners, friendly fonts, integrate border into environment, replace gear icon with styled version.
+
+**26.** Let's add some satisfying feedback for each block we have captured
+
+**27.** let's change visualisation of vitality to timer, the logic stays the same
+
+**28.** rename vitality to time
+
+**29.** redo field percent to progress bar with star at 80% which will signalize how much field we should capture
+
+**30.** remove the timer icon
+
+---
+
 ---
 
 # Commit History — Chronological
